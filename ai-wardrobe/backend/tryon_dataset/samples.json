@@ -389,5 +389,27 @@
     "clothing_image_url": null,
     "body_image_path": "tryon_dataset\\images\\body_d30c8099d910.png",
     "clothing_image_path": "tryon_dataset\\images\\clothing_d30c8099d910.png"
+  },
+  {
+    "id": "5032a52f0caa",
+    "sample_id": "5032a52f0caa",
+    "user_id": "guest",
+    "category": "clothing",
+    "source": "website",
+    "body_image_url": null,
+    "clothing_image_url": null,
+    "body_image_path": "tryon_dataset\\images\\body_5032a52f0caa.png",
+    "clothing_image_path": "tryon_dataset\\images\\clothing_5032a52f0caa.png"
+  },
+  {
+    "id": "5032a52f0caa",
+    "sample_id": "5032a52f0caa",
+    "user_id": "guest",
+    "category": "clothing",
+    "source": "website",
+    "body_image_url": null,
+    "clothing_image_url": null,
+    "body_image_path": "tryon_dataset\\images\\body_5032a52f0caa.png",
+    "clothing_image_path": "tryon_dataset\\images\\clothing_5032a52f0caa.png"
   }
 ]

@@ -5760,5 +5760,229 @@
     },
     "created_at": "2026-05-20T04:10:10.312946+00:00",
     "tryon_image_path": "tryon_dataset/images/tryon_eaf6ee9f8808.png"
+  },
+  {
+    "id": "b5ff3725311f",
+    "sample_id": "5032a52f0caa",
+    "user_id": "guest",
+    "occasion": "casual",
+    "body_image_path": "tryon_dataset\\images\\body_5032a52f0caa.png",
+    "clothing_image_path": "tryon_dataset\\images\\clothing_5032a52f0caa.png",
+    "tryon_image_path": "tryon_dataset/images/tryon_b5ff3725311f.png",
+    "model": "trained",
+    "clothing_analysis": {
+      "category": "clothing",
+      "colors": [
+        "unknown"
+      ],
+      "primary_color": "gray",
+      "occasion": [
+        "casual"
+      ],
+      "season": [
+        "all-season"
+      ],
+      "tags": [
+        "clothing"
+      ],
+      "style": "casual",
+      "brand_hint": null,
+      "description": "Clothing item",
+      "analysis_method": "fallback"
+    },
+    "recommendations": {
+      "strategy": "external_fallback",
+      "occasion": "casual",
+      "wardrobe_matches": [],
+      "external_matches": [
+        {
+          "title": "Men Solid Polo Neck Pure Cotton White T-Shirt",
+          "description": "Men Solid Polo Neck Pure Cotton White T-Shirt",
+          "image_url": "https://rukminim2.flixcart.com/image/1536/1536/xif0q/t-shirt/b/s/p/-original-imagzwrsmryt7kzt.jpeg?q=90",
+          "image": "https://rukminim2.flixcart.com/image/1536/1536/xif0q/t-shirt/b/s/p/-original-imagzwrsmryt7kzt.jpeg?q=90",
+          "originalPrice": 1799,
+          "price": 809,
+          "platform": "Myntra",
+          "affiliate_link": "https://fktr.in/1sCCc4w",
+          "category": "T-shirts",
+          "gender": "men",
+          "occasion": [
+            "casual"
+          ],
+          "season": [
+            "summer",
+            "spring"
+          ],
+          "tags": [
+            "slim-fit",
+            "classic",
+            "cotton"
+          ],
+          "size_chart": {
+            "S": "36-38",
+            "M": "38-40",
+            "L": "40-42"
+          },
+          "id": "sample-1",
+          "match_score": 40
+        },
+        {
+          "title": "Floral Summer Dress",
+          "description": "Lightweight floral dress made for summer outings and brunches.",
+          "image_url": "https://images.unsplash.com/photo-1595777707802-e176fc7f42b9?w=800&h=1000&fit=crop&auto=format&q=80",
+          "image": "https://images.unsplash.com/photo-1595777707802-e176fc7f42b9?w=800&h=1000&fit=crop&auto=format&q=80",
+          "price": 1899,
+          "platform": "Ajio",
+          "affiliate_link": "https://example.com/product/2",
+          "category": "dresses",
+          "gender": "women",
+          "occasion": [
+            "casual",
+            "party"
+          ],
+          "season": [
+            "summer"
+          ],
+          "tags": [
+            "floral",
+            "summer",
+            "lightweight"
+          ],
+          "size_chart": {
+            "S": "32-34",
+            "M": "34-36",
+            "L": "36-38"
+          },
+          "id": "sample-2",
+          "match_score": 40
+        },
+        {
+          "title": "Leather Bomber Jacket",
+          "description": "A premium leather bomber jacket with a timeless silhouette.",
+          "image_url": "https://images.unsplash.com/photo-1551028719-00167b16eac5?w=800&h=1000&fit=crop&auto=format&q=80",
+          "image": "https://images.unsplash.com/photo-1551028719-00167b16eac5?w=800&h=1000&fit=crop&auto=format&q=80",
+          "badge": "SALE",
+          "originalPrice": 6499,
+          "price": 5499,
+          "platform": "Amazon",
+          "affiliate_link": "https://example.com/product/3",
+          "category": "jackets",
+          "gender": "men",
+          "occasion": [
+            "casual",
+            "evening"
+          ],
+          "season": [
+            "winter",
+            "autumn"
+          ],
+          "tags": [
+            "leather",
+            "bomber",
+            "outdoor"
+          ],
+          "size_chart": {
+            "M": "38-40",
+            "L": "40-42",
+            "XL": "42-44"
+          },
+          "id": "sample-3",
+          "match_score": 40
+        },
+        {
+          "title": "Off-Shoulder Top",
+          "description": "A modern off-shoulder top that pairs well with denim and skirts.",
+          "image_url": "https://images.unsplash.com/photo-1485872299829-c673f5194813?w=800&h=1000&fit=crop&auto=format&q=80",
+          "image": "https://images.unsplash.com/photo-1485872299829-c673f5194813?w=800&h=1000&fit=crop&auto=format&q=80",
+          "price": 1599,
+          "platform": "Zalora",
+          "affiliate_link": "https://example.com/product/4",
+          "category": "tops",
+          "gender": "women",
+          "occasion": [
+            "casual",
+            "outing"
+          ],
+          "season": [
+            "summer",
+            "spring"
+          ],
+          "tags": [
+            "off-shoulder",
+            "trendy",
+            "light"
+          ],
+          "size_chart": {
+            "S": "32-34",
+            "M": "34-36",
+            "L": "36-38"
+          },
+          "id": "sample-4",
+          "match_score": 40
+        },
+        {
+          "title": "Blue Denim Jeans",
+          "description": "Classic blue denim jeans with perfect fit and comfort.",
+          "image_url": "https://images.unsplash.com/photo-1542272604-787c62d465d1?w=800&h=1000&fit=crop&auto=format&q=80",
+          "image": "https://images.unsplash.com/photo-1542272604-787c62d465d1?w=800&h=1000&fit=crop&auto=format&q=80",
+          "price": 1799,
+          "platform": "Myntra",
+          "affiliate_link": "https://example.com/product/5",
+          "category": "jeans",
+          "gender": "women",
+          "occasion": [
+            "casual",
+            "everyday"
+          ],
+          "season": [
+            "all"
+          ],
+          "tags": [
+            "denim",
+            "classic",
+            "comfortable"
+          ],
+          "size_chart": {
+            "S": "26",
+            "M": "28",
+            "L": "30"
+          },
+          "id": "sample-5",
+          "match_score": 40
+        },
+        {
+          "title": "Casual Chino Shorts",
+          "description": "Comfortable chino shorts ideal for summer and casual outings.",
+          "image_url": "https://images.unsplash.com/photo-1598033129519-c90900bc9de1?w=800&h=1000&fit=crop&auto=format&q=80",
+          "image": "https://images.unsplash.com/photo-1598033129519-c90900bc9de1?w=800&h=1000&fit=crop&auto=format&q=80",
+          "price": 1299,
+          "platform": "Ajio",
+          "affiliate_link": "https://example.com/product/8",
+          "category": "shorts",
+          "gender": "men",
+          "occasion": [
+            "casual",
+            "outing"
+          ],
+          "season": [
+            "summer"
+          ],
+          "tags": [
+            "chino",
+            "casual",
+            "breathable"
+          ],
+          "size_chart": {
+            "S": "28-30",
+            "M": "30-32",
+            "L": "32-34"
+          },
+          "id": "sample-8",
+          "match_score": 40
+        }
+      ],
+      "message": "Showing matching products from APIs."
+    },
+    "created_at": "2026-05-20T04:30:00.722149+00:00"
   }
 ]

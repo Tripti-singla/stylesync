@@ -210,6 +210,12 @@ def seed_products():
             "response": _with_fallback_ids(sample_products),
         }
     try:
+        try:
+            # Clear existing products to prevent duplicates and clean up old database state
+            supabase.table("products").delete().neq("title", "").execute()
+        except Exception as del_err:
+            print("Failed to delete existing products:", del_err)
+            
         response = supabase.table("products").insert(sample_products).execute()
         return {
             "status": "seeded",

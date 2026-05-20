@@ -107,9 +107,12 @@ export const api = {
   getProducts: async (filters = {}) => {
     try {
       const params = new URLSearchParams();
-      const searchTerm = filters.search && String(filters.search).trim() ? filters.search : "fashion";
-      // Always include a search term so backend will use the external search endpoint.
-      params.append("search", searchTerm);
+      const hasStructuralFilters = filters.category || filters.gender || filters.subcategory;
+      if (filters.search && String(filters.search).trim()) {
+        params.append("search", filters.search);
+      } else if (!hasStructuralFilters) {
+        params.append("search", "fashion");
+      }
       if (filters.category) params.append("category", filters.category);
       if (filters.gender) params.append("gender", filters.gender);
       if (filters.subcategory) params.append("subcategory", filters.subcategory);
@@ -128,10 +131,50 @@ export const api = {
       const data = await res.json();
       console.log("API response data:", data);
       const mapped = extractProductArray(data).map(mapProduct);
-      return mapped.length ? mapped : localFallbackProducts.map(mapProduct);
+      if (mapped.length) {
+        // Filter mapped results strictly by requested gender if returned by API
+        let filteredMapped = mapped;
+        if (filters.gender) {
+          const g = filters.gender.toLowerCase().trim();
+          filteredMapped = filteredMapped.filter(p => (p.category || "").toLowerCase() === g);
+        }
+        if (filters.subcategory) {
+          const sub = filters.subcategory.toLowerCase().trim();
+          filteredMapped = filteredMapped.filter(p => (p.subcategory || "").toLowerCase() === sub);
+        }
+        return filteredMapped;
+      }
+      
+      let filteredFallback = localFallbackProducts;
+      if (filters.gender) {
+        const g = filters.gender.toLowerCase().trim();
+        filteredFallback = filteredFallback.filter(p => (p.gender || "").toLowerCase() === g);
+      }
+      if (filters.subcategory) {
+        const sub = filters.subcategory.toLowerCase().trim();
+        filteredFallback = filteredFallback.filter(p => (p.category || "").toLowerCase() === sub);
+      }
+      if (filters.category) {
+        const cat = filters.category.toLowerCase().trim();
+        filteredFallback = filteredFallback.filter(p => (p.category || "").toLowerCase() === cat);
+      }
+      return filteredFallback.map(mapProduct);
     } catch (error) {
       console.warn("Falling back to local products:", error);
-      return localFallbackProducts.map(mapProduct);
+      let filteredFallback = localFallbackProducts;
+      if (filters.gender) {
+        const g = filters.gender.toLowerCase().trim();
+        filteredFallback = filteredFallback.filter(p => (p.gender || "").toLowerCase() === g);
+      }
+      if (filters.subcategory) {
+        const sub = filters.subcategory.toLowerCase().trim();
+        filteredFallback = filteredFallback.filter(p => (p.category || "").toLowerCase() === sub);
+      }
+      if (filters.category) {
+        const cat = filters.category.toLowerCase().trim();
+        filteredFallback = filteredFallback.filter(p => (p.category || "").toLowerCase() === cat);
+      }
+      return filteredFallback.map(mapProduct);
     }
   },
 

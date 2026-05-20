@@ -80,7 +80,10 @@ def image_proxy(url: str = Query(...)):
             return FileResponse(path=str(cache_path), media_type=mimetypes.guess_type(str(cache_path))[0] or "image/jpeg")
 
         # Fetch upstream and save to cache
-        resp = requests.get(url, timeout=20, stream=True)
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        }
+        resp = requests.get(url, headers=headers, timeout=20, stream=True)
         resp.raise_for_status()
 
         content_type = resp.headers.get("content-type", "image/jpeg")

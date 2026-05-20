@@ -22,3 +22,19 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv
+venv/
+ENV/
+env/
+
+# App Env & Data
+.env
+backend/.env
+backend/static/image_cache/
+backend/tryon_dataset/images/
+

@@ -103,7 +103,7 @@ def _normalize_db_product(row: dict) -> dict:
     subcat = ""
     if breadcrumbs:
         import re
-        nodes = [n.strip() for n in re.split(r"\s*[›>»\x9b\uFFFD]\s*", breadcrumbs) if n.strip()]
+        nodes = [n.strip() for n in re.split(r"\s*(?:[›>»\x9b\uFFFD]|\u00e2\u20ac\u00ba)\s*", breadcrumbs) if n.strip()]
         if nodes:
             subcat = nodes[-1].lower()
             

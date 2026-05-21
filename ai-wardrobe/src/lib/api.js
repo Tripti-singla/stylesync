@@ -1,4 +1,3 @@
-import { products as localProducts } from "@/data/products";
 
 const BASE_URL = import.meta.env.DEV ? "" : (import.meta.env.VITE_BACKEND_URL ?? "");
 const PLACEHOLDER_IMAGE =
@@ -49,22 +48,6 @@ const getProductImage = (product) => {
   return image || PLACEHOLDER_IMAGE;
 };
 
-const localFallbackProducts = localProducts.map((product) => ({
-  id: product.id,
-  title: product.name,
-  platform: product.brand,
-  image: product.image,
-  price: product.price,
-  originalPrice: product.originalPrice,
-  category: product.subcategory,
-  gender: product.category,
-  badge: product.badge,
-  description: product.description,
-  colors: product.colors,
-  rating: product.rating,
-  reviews: product.reviews,
-  size_chart: product.sizes ? Object.fromEntries(product.sizes.map((size) => [size, size])) : undefined,
-}));
 
 export const mapProduct = (rawProduct) => {
   const image = getProductImage(rawProduct);
@@ -144,37 +127,10 @@ export const api = {
         }
         return filteredMapped;
       }
-      
-      let filteredFallback = localFallbackProducts;
-      if (filters.gender) {
-        const g = filters.gender.toLowerCase().trim();
-        filteredFallback = filteredFallback.filter(p => (p.gender || "").toLowerCase() === g);
-      }
-      if (filters.subcategory) {
-        const sub = filters.subcategory.toLowerCase().trim();
-        filteredFallback = filteredFallback.filter(p => (p.category || "").toLowerCase() === sub);
-      }
-      if (filters.category) {
-        const cat = filters.category.toLowerCase().trim();
-        filteredFallback = filteredFallback.filter(p => (p.category || "").toLowerCase() === cat);
-      }
-      return filteredFallback.map(mapProduct);
+      return [];
     } catch (error) {
-      console.warn("Falling back to local products:", error);
-      let filteredFallback = localFallbackProducts;
-      if (filters.gender) {
-        const g = filters.gender.toLowerCase().trim();
-        filteredFallback = filteredFallback.filter(p => (p.gender || "").toLowerCase() === g);
-      }
-      if (filters.subcategory) {
-        const sub = filters.subcategory.toLowerCase().trim();
-        filteredFallback = filteredFallback.filter(p => (p.category || "").toLowerCase() === sub);
-      }
-      if (filters.category) {
-        const cat = filters.category.toLowerCase().trim();
-        filteredFallback = filteredFallback.filter(p => (p.category || "").toLowerCase() === cat);
-      }
-      return filteredFallback.map(mapProduct);
+      console.warn("Failed to fetch products:", error);
+      return [];
     }
   },
 

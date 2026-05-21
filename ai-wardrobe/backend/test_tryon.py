@@ -2,8 +2,12 @@
 """
 Test script for Try On functionality
 """
-import requests
 import sys
+import io
+# Avoid encoding issues on Windows terminals
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+
+import requests
 from pathlib import Path
 
 sys.path.insert(0, '.')

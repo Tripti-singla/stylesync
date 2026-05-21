@@ -8,43 +8,26 @@ from typing import Optional
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 import requests
+import urllib3
+
+# Suppress InsecureRequestWarning when verify=False is used
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 from services.supabase_service import seed_products, get_products, get_product_by_id
-from services.supabase_data import sample_products
-
 from services.external_api_service import fetch_products_rapidapi, fetch_products_from_all_sources, has_external_sources
 from config import USE_EXTERNAL_ONLY
-
 
 router = APIRouter()
 executor = ThreadPoolExecutor(max_workers=2)
 
 
-def _product_lookup_key(item):
-    return str(item.get("title") or item.get("name") or "").strip().lower()
-
-
-_sample_products_by_title = {
-    _product_lookup_key(item): item
-    for item in sample_products
-    if _product_lookup_key(item)
-}
-
-
-def _enrich_product(item):
-    merged = dict(item)
-    sample_item = _sample_products_by_title.get(_product_lookup_key(merged))
-
-    if sample_item:
-        for field in ("image", "image_url", "badge", "originalPrice", "description", "platform", "category", "gender", "occasion", "season", "tags", "size_chart"):
-            if merged.get(field) in (None, "", []):
-                if sample_item.get(field) not in (None, "", []):
-                    merged[field] = sample_item.get(field)
-
-        if not merged.get("image") and merged.get("image_url"):
-            merged["image"] = merged["image_url"]
-
-    return merged
+def _map_product_image(item):
+    if isinstance(item, dict):
+        if not item.get("image") and item.get("image_url"):
+            item["image"] = item.get("image_url")
+        elif not item.get("image_url") and item.get("image"):
+            item["image_url"] = item.get("image")
+    return item
 
 
 @router.get("/image-proxy")
@@ -83,7 +66,7 @@ def image_proxy(url: str = Query(...)):
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         }
-        resp = requests.get(url, headers=headers, timeout=20, stream=True)
+        resp = requests.get(url, headers=headers, timeout=20, stream=True, verify=False)
         resp.raise_for_status()
 
         content_type = resp.headers.get("content-type", "image/jpeg")
@@ -169,7 +152,7 @@ async def products(
     limit: int = Query(20, ge=1, le=100),
 ):
     try:
-        # If configured, bypass local data and use external API products only.
+        # If configured, bypass local database and use external API products only.
         if USE_EXTERNAL_ONLY and has_external_sources():
             try:
                 external_items = fetch_products_from_all_sources(
@@ -179,9 +162,9 @@ async def products(
                     limit=limit,
                 )
 
-                # Enrich and filter external items similarly to local products
+                # Ensure image mapping is applied to external items
                 external_items = [
-                    _enrich_product(item) for item in external_items if isinstance(item, dict)
+                    _map_product_image(item) for item in external_items if isinstance(item, dict)
                 ]
 
                 # If the aggregated external sources returned nothing, try the RapidAPI search endpoint as a fallback.
@@ -192,7 +175,7 @@ async def products(
 
                         rapid_products = await asyncio.get_event_loop().run_in_executor(executor, fetch_rapid)
                         external_items = [
-                            _enrich_product(item) for item in (rapid_products or []) if isinstance(item, dict)
+                            _map_product_image(item) for item in (rapid_products or []) if isinstance(item, dict)
                         ]
                     except Exception:
                         external_items = []
@@ -206,8 +189,8 @@ async def products(
                 print("External-only fetch error:", e)
                 return {"products": []}
 
-        # ✅ Get DB products (fast)
-        local_response = get_products(
+        # ✅ Get DB products from Supabase
+        db_response = get_products(
             search=search,
             category=category,
             gender=gender,
@@ -215,18 +198,18 @@ async def products(
             limit=limit
         )
 
-        # ✅ Extract list safely
-        if isinstance(local_response, dict):
-            local_products = local_response.get("products", [])
+        # Extract list safely
+        if isinstance(db_response, dict):
+            db_products = db_response.get("products", [])
         else:
-            local_products = local_response if isinstance(local_response, list) else []
+            db_products = db_response if isinstance(db_response, list) else []
 
-        local_products = [_enrich_product(item) for item in local_products if isinstance(item, dict)]
+        db_products = [_map_product_image(item) for item in db_products if isinstance(item, dict)]
 
-        print("Local products count:", len(local_products))
+        print("Supabase products count:", len(db_products))
 
-        # Only blend RapidAPI for general search pages.
-        # For structured filters (gender/category/subcategory), keep results strict.
+        # Only blend RapidAPI for general search pages when search is active.
+        # For structured filters (gender/category/subcategory), keep results strict to DB.
         should_fetch_rapid = bool(search) and not any([category, gender, subcategory])
 
         rapid_products = []
@@ -240,7 +223,7 @@ async def products(
                     timeout=5.0
                 )
             except asyncio.TimeoutError:
-                print("RapidAPI timeout - using only local products")
+                print("RapidAPI timeout - using only Supabase products")
             except Exception as e:
                 print("RapidAPI error:", e)
 
@@ -254,7 +237,7 @@ async def products(
         # Merge, de-duplicate by id/title, and respect requested limit.
         seen = set()
         all_products = []
-        for item in local_products + filtered_rapid:
+        for item in db_products + filtered_rapid:
             key = _normalize(item.get("id")) or _normalize(item.get("title"))
             if key in seen:
                 continue
@@ -267,7 +250,6 @@ async def products(
 
     except Exception as err:
         print("Error in products endpoint:", err)
-        # Return at least an empty list with status 200 instead of error
         return {"products": []}
 
 
@@ -277,11 +259,12 @@ async def product_detail(product_id: str):
         product = get_product_by_id(product_id)
         if not product:
             raise HTTPException(status_code=404, detail="Product not found")
-        return product
+        return _map_product_image(product)
     except HTTPException:
         raise
     except Exception as err:
         raise HTTPException(status_code=500, detail=str(err))
+
 
 @router.post("/products/seed")
 async def products_seed():
@@ -290,4 +273,3 @@ async def products_seed():
         return result
     except Exception as err:
         raise HTTPException(status_code=500, detail=str(err))
-    

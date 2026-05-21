@@ -49,23 +49,19 @@ def create_logger(log_dir: Path):
 
 
 def validate_dataset(samples_file: Path, logger):
-    """Validate that training dataset exists and has samples"""
-    logger.info(f"Validating dataset at {samples_file}...")
-    
-    if not samples_file.exists():
-        logger.error(f"Dataset file not found: {samples_file}")
-        return False, 0
+    """Validate that training dataset exists and has samples from Supabase"""
+    logger.info("Validating dataset records from Supabase...")
     
     try:
-        with open(samples_file, "r", encoding="utf-8") as f:
-            samples = json.load(f)
+        from services.virtual_tryon import _load_sample_records
+        samples = _load_sample_records()
         
         sample_count = len(samples)
         if sample_count == 0:
-            logger.error("Dataset is empty. No samples found.")
+            logger.error("No training samples found in Supabase. Open the Try On page and generate a try-on once.")
             return False, 0
         
-        logger.success(f"Dataset validated. Found {sample_count} samples")
+        logger.success(f"Dataset validated. Found {sample_count} samples in Supabase")
         
         # Show sample distribution by category
         categories = {}
@@ -79,9 +75,6 @@ def validate_dataset(samples_file: Path, logger):
         
         return True, sample_count
     
-    except json.JSONDecodeError as e:
-        logger.error(f"Invalid JSON in samples file: {e}")
-        return False, 0
     except Exception as e:
         logger.error(f"Error validating dataset: {e}")
         return False, 0

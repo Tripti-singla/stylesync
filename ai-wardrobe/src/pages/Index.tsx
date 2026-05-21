@@ -6,7 +6,6 @@ import { ProductCard } from "@/components/ProductCard";
 import { api } from "@/lib/api";
 import { shuffleArray } from "@/lib/shuffle";
 import { categoryCards } from "@/data/categoryCards";
-import { products as localProducts } from "@/data/products";
 import heroBanner from "@/assets/hero-banner.jpg";
 
 const Index = () => {
@@ -50,31 +49,7 @@ const Index = () => {
     [products]
   );
 
-  const localSaleProducts = useMemo(
-    () =>
-      localProducts
-        .filter((product) => product.badge === "SALE" || (typeof product.originalPrice === "number" && product.originalPrice > product.price))
-        .slice(0, 4)
-        .map((product) => ({
-          id: product.id,
-          name: product.name,
-          brand: product.brand,
-          image: product.image,
-          price: product.price,
-          originalPrice: product.originalPrice,
-          category: product.category,
-          subcategory: product.subcategory,
-          colors: product.colors,
-          rating: product.rating,
-          reviews: product.reviews,
-          badge: product.badge,
-          description: product.description,
-          sizes: product.sizes,
-        })),
-    []
-  );
-
-  const saleItems = onSale.length > 0 ? onSale : localSaleProducts;
+  const saleItems = onSale;
 
   const displayProducts = useMemo(
     () => products.slice(0, 3),

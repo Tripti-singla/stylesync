@@ -25,32 +25,9 @@ from services.supabase_service import add_tryon_sample, get_tryon_samples, supab
 BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = BASE_DIR / "tryon_dataset"
 IMAGES_DIR = DATA_DIR / "images"
-SAMPLES_FILE = DATA_DIR / "samples.json"
-HISTORY_FILE = DATA_DIR / "history.json"
 MODEL_PATH = DATA_DIR / "tryon_model.pth"
 
 os.makedirs(IMAGES_DIR, exist_ok=True)
-
-
-def _load_json_list(file_path: Path) -> list:
-    if not file_path.exists():
-        return []
-
-    try:
-        with open(file_path, "r", encoding="utf-8") as file_handle:
-            data = json.load(file_handle)
-        return data if isinstance(data, list) else []
-    except Exception:
-        return []
-
-
-def _append_json_record(file_path: Path, record: dict):
-    file_path.parent.mkdir(parents=True, exist_ok=True)
-    records = _load_json_list(file_path)
-    records.append(record)
-
-    with open(file_path, "w", encoding="utf-8") as file_handle:
-        json.dump(records, file_handle, indent=2)
 
 
 def _load_image_from_url(url: str) -> Image.Image:
@@ -84,16 +61,8 @@ def _load_image_from_upload(file_data) -> Image.Image:
         return Image.new("RGBA", (768, 1024), (235, 235, 235, 255))
 
 
-def _save_sample_record(record: dict):
-    _append_json_record(SAMPLES_FILE, record)
-
-
 def _load_sample_records() -> list:
-    supabase_samples = get_tryon_samples(limit=500)
-    if supabase_samples:
-        return supabase_samples
-
-    return _load_json_list(SAMPLES_FILE)
+    return get_tryon_samples(limit=500)
 
 
 def _resolve_sample_image(entry: dict, path_key: str, url_key: str):
@@ -143,10 +112,10 @@ def save_tryon_history_record(
             import logging
             logging.getLogger(__name__).error(f"Failed to save tryon history image file: {e}")
 
-    # Build the record for history.json (without massive base64 tryon_image)
+    # Build the record
     json_record = {
         "id": record_id,
-        "sample_id": sample_id,
+        "sample_id": sample_id or record_id,
         "user_id": user_id,
         "occasion": occasion,
         "body_image_path": body_image_path,
@@ -157,9 +126,22 @@ def save_tryon_history_record(
         "recommendations": recommendations,
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
-    _append_json_record(HISTORY_FILE, json_record)
     
-    # Return record containing both the path and the base64 string for API compatibility
+    # Save/update completed record in Supabase tryon_samples table
+    if supabase and sample_id:
+        try:
+            update_payload = {
+                "tryon_image": tryon_image_path,
+                "model": model,
+                "clothing_analysis": clothing_analysis,
+                "recommendations": recommendations,
+                "occasion": occasion,
+            }
+            supabase.table("tryon_samples").update(update_payload).eq("sample_id", sample_id).execute()
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).error(f"Failed to update tryon record in Supabase: {e}")
+            
     return {
         **json_record,
         "tryon_image": tryon_image
@@ -233,8 +215,6 @@ def save_tryon_sample(user_id: str, category: str = None, body_image_url: str = 
         "clothing_image_path": str(clothing_path.relative_to(BASE_DIR)),
     }
 
-    if supabase is not None:
-        _save_sample_record(record)
     saved_sample = add_tryon_sample(record)
 
     return {

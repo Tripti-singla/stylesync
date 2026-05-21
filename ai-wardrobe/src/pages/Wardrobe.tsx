@@ -2,7 +2,6 @@ import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Shirt, Sparkles, Plus, X } from "lucide-react";
 import { WardrobeItem } from "@/data/products";
-import { products } from "@/data/products";
 import { ProductCard } from "@/components/ProductCard";
 import { api, mapProduct } from "@/lib/api";
 
@@ -37,12 +36,7 @@ const WardrobePage = () => {
   // Simple AI recommendation: suggest items from different categories + matching products
   const getRecommendations = (item: WardrobeItem) => {
     const otherItems = wardrobe.filter((w) => w.id !== item.id && w.category !== item.category);
-    const matchingProducts = products.filter((p) => {
-      if (item.category === "topwear") return p.subcategory === "trousers" || p.subcategory === "shorts";
-      if (item.category === "bottomwear") return p.subcategory === "shirts" || p.subcategory === "tops";
-      return true;
-    }).slice(0, 4);
-    return { wardrobeMatches: otherItems, productMatches: matchingProducts };
+    return { wardrobeMatches: otherItems, productMatches: [] };
   };
 
   const handleUpload = () => {

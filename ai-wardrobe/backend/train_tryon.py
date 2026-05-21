@@ -8,21 +8,11 @@ SAMPLES_FILE = BASE_DIR / "tryon_dataset" / "samples.json"
 
 
 def _load_samples() -> list:
-    samples = _load_sample_records()
-    if samples:
-        return samples
-
-    if not SAMPLES_FILE.exists():
-        return []
-
-    try:
-        return json.loads(SAMPLES_FILE.read_text(encoding="utf-8") or "[]")
-    except Exception:
-        return []
+    return _load_sample_records()
 
 if __name__ == "__main__":
     if not _load_samples():
-        print("No try-on samples found yet. Open the Try On page and generate a try-on once, or run backend/seed_tryon_samples.py to seed Supabase.")
+        print("No try-on samples found in Supabase yet. Open the Try On page and generate a try-on once.")
         exit(0)
 
     print("Starting virtual try-on training...")

@@ -4,15 +4,29 @@ import { supabase } from "../lib/supabaseClient";
 const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState(() => {
+    const localGuest = localStorage.getItem("stylesync_guest");
+    if (localGuest) {
+      try {
+        return JSON.parse(localGuest);
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  });
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
-      setUser(data.session?.user || null);
+      if (!localStorage.getItem("stylesync_guest")) {
+        setUser(data.session?.user || null);
+      }
     });
 
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user || null);
+      if (!localStorage.getItem("stylesync_guest")) {
+        setUser(session?.user || null);
+      }
     });
 
     return () => listener.subscription.unsubscribe();
@@ -24,10 +38,24 @@ export const AuthProvider = ({ children }) => {
   const signIn = (email, password) =>
     supabase.auth.signInWithPassword({ email, password });
 
-  const signOut = () => supabase.auth.signOut();
+  const continueAsGuest = () => {
+    const guestUser = { id: "demo-user-1", email: "guest@stylesync.ai", name: "Guest User", isGuest: true };
+    setUser(guestUser);
+    localStorage.setItem("stylesync_guest", JSON.stringify(guestUser));
+  };
+
+  const signOut = async () => {
+    localStorage.removeItem("stylesync_guest");
+    setUser(null);
+    try {
+      await supabase.auth.signOut();
+    } catch (e) {
+      console.error("Supabase signOut error:", e);
+    }
+  };
 
   return (
-    <AuthContext.Provider value={{ user, signUp, signIn, signOut }}>
+    <AuthContext.Provider value={{ user, signUp, signIn, continueAsGuest, signOut }}>
       {children}
     </AuthContext.Provider>
   );

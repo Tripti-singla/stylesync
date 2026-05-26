@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
-import { ArrowLeft, Heart, ShoppingBag, Star, ThumbsUp, MessageSquare, Filter, X } from "lucide-react";
+import { ArrowLeft, Heart, ShoppingBag, Star, ThumbsUp, MessageSquare, Filter, X, Sparkles } from "lucide-react";
 import { api } from "@/lib/api";
 import { useCart } from "@/context/CartContext";
 import { useWishlist } from "@/context/WishlistContext";
@@ -136,9 +136,9 @@ const ProductDetail = () => {
               </div>
 
               <div className="flex items-center gap-4">
-                <span className="text-3xl font-bold text-foreground">₹{product.price}</span>
+                <span className="text-3xl font-bold text-foreground">${product.price}</span>
                 {product.originalPrice && (
-                  <span className="text-sm text-muted-foreground line-through">₹{product.originalPrice}</span>
+                  <span className="text-sm text-muted-foreground line-through">${product.originalPrice}</span>
                 )}
               </div>
 
@@ -196,20 +196,20 @@ const ProductDetail = () => {
 
           {/* Action Buttons */}
           <div className="flex flex-col gap-3 sm:flex-row">
-            <button 
-              onClick={() => {
-                if (!selectedSize) {
-                  toast.error("Please select a size first");
-                  return;
-                }
-                addToCart(product);
-                toast.success("Added to cart");
-              }}
-              className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              disabled={!selectedSize}
+            <Link
+              to={`/tryon?clothing_url=${encodeURIComponent(product.image)}&clothing_name=${encodeURIComponent(product.name)}&autogenerate=true`}
+              className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl border border-primary/20 bg-primary/10 px-5 py-3 text-sm font-semibold text-primary hover:bg-primary/15 transition-colors"
             >
-              <ShoppingBag className="w-4 h-4" /> Add to cart
-            </button>
+              <Sparkles className="w-4 h-4" /> Try On (Virtual fitting)
+            </Link>
+            <a 
+              href={product.productUrl || "#"}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground hover:bg-primary/90 transition-colors"
+            >
+              <ShoppingBag className="w-4 h-4" /> Buy Now
+            </a>
             <button 
               onClick={() => {
                 toggleWishlist(product);

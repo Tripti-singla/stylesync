@@ -81,7 +81,8 @@ class CatVTONModel:
             from safetensors.torch import load_file
             state_dict = load_file(catvton_path)
 
-            # For now, use base pipeline - CatVTON weights loading
+            # Load the CatVTON weights into the UNet model
+            pipeline.unet.load_state_dict(state_dict, strict=False)
             pipeline.to(self.device)
 
             if self.use_fp16:

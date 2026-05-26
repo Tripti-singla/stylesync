@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import { useAuth } from "./AuthContext";
 
 export interface UserProfile {
   name: string;
@@ -25,14 +26,33 @@ interface ProfileContextType {
 const ProfileContext = createContext<ProfileContextType | undefined>(undefined);
 
 export function ProfileProvider({ children }: { children: ReactNode }) {
-  const [profile, setProfile] = useState<UserProfile>(() => {
-    const saved = localStorage.getItem("profile");
-    return saved ? JSON.parse(saved) : defaultProfile;
-  });
+  const { user } = useAuth() as any;
+  const [profile, setProfile] = useState<UserProfile>(defaultProfile);
 
   useEffect(() => {
-    localStorage.setItem("profile", JSON.stringify(profile));
-  }, [profile]);
+    if (user) {
+      const saved = localStorage.getItem(`stylesync_profile_${user.id || user.email}`);
+      if (saved) {
+        setProfile(JSON.parse(saved));
+      } else {
+        setProfile({
+          name: user.user_metadata?.full_name || user.name || "",
+          email: user.email || "",
+          phone: user.phone || "",
+          address: "",
+          avatar: "",
+        });
+      }
+    } else {
+      setProfile(defaultProfile);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    if (user) {
+      localStorage.setItem(`stylesync_profile_${user.id || user.email}`, JSON.stringify(profile));
+    }
+  }, [profile, user]);
 
   const updateProfile = (data: Partial<UserProfile>) => {
     setProfile((prev) => ({ ...prev, ...data }));

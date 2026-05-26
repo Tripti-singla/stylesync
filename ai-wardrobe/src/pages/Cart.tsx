@@ -98,7 +98,7 @@ export default function CartPage() {
                   </button>
                 </div>
                 <div className="flex items-center justify-between sm:justify-end gap-4">
-                  <span className="text-sm font-bold text-foreground">₹{item.product.price * item.quantity}</span>
+                  <span className="text-sm font-bold text-foreground">${item.product.price * item.quantity}</span>
                   <button onClick={() => removeFromCart(item.product.id)} className="p-1.5 rounded hover:bg-destructive/10 text-destructive">
                     <Trash2 className="w-4 h-4" />
                   </button>
@@ -255,7 +255,7 @@ export default function CartPage() {
         <div className="p-6 bg-card rounded-lg border border-border">
           <div className="flex justify-between items-center text-lg font-display font-bold text-foreground mb-4">
             <span>Order total</span>
-            <span>₹{totalPrice}</span>
+            <span>${totalPrice}</span>
           </div>
           {formError && <p className="text-sm text-destructive mb-4">{formError}</p>}
           <button

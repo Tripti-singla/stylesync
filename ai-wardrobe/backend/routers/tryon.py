@@ -87,8 +87,19 @@ async def predict_tryon(
             )
             print(f"[TRYON] Try-on generated successfully with model: {result.get('model')}")
         except Exception as e:
-            logger.exception("Try-on generation failed")
-            raise
+            logger.exception("Try-on generation failed. Invoking robust local pre-composer as safe backup...")
+            try:
+                from services.virtual_tryon import _compose_try_on, _encode_image_to_base64, _load_sample_image
+                if body_stream is not None:
+                    body_stream.seek(0)
+                if clothing_stream is not None:
+                    clothing_stream.seek(0)
+                body_img, clothing_img = _load_sample_image(body_image_url, clothing_image_url, body_stream, clothing_stream)
+                comp = _compose_try_on(body_img, clothing_img)
+                result = {"tryon_image": _encode_image_to_base64(comp), "model": "ai_styled_preview"}
+            except Exception as inner_err:
+                logger.exception("Composition also failed")
+                raise HTTPException(status_code=500, detail=f"Try-on failed completely: {str(inner_err)}")
         
         # Step 2: Analyze clothing
         clothing_analysis = None

@@ -35,6 +35,7 @@ class OutfitMatchRequest(BaseModel):
     primary_color: Optional[str] = None
     tags: List[str] = Field(default_factory=list)
     limit: int = Field(default=10, ge=1, le=50)
+    exclude_item_id: Optional[str] = None
 
 
 class OpenAIRecommendationRequest(BaseModel):
@@ -47,3 +48,9 @@ class OpenAIRecommendationRequest(BaseModel):
     weather: Optional[str] = None
     product_metadata: Dict[str, Any] = Field(default_factory=dict)
     limit: int = Field(default=6, ge=1, le=20)
+
+
+class WishlistRequest(BaseModel):
+    user_id: str
+    product_id: str
+

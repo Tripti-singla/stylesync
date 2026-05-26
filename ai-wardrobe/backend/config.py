@@ -13,6 +13,7 @@ SUPABASE_KEY = (
 
 # Other APIs
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 API_CLIENT_ID = os.getenv("API_CLIENT_ID")
 API_CLIENT_SECRET = os.getenv("API_CLIENT_SECRET")
 API_BASE64_HEADER = os.getenv("API_BASE64_HEADER")
@@ -23,3 +24,6 @@ RAPID_API_KEY = os.getenv("RAPID_API_KEY")
 # Toggle to force using external API data instead of local DB/sample products.
 # Set to "true" to prefer external sources.
 USE_EXTERNAL_ONLY = os.getenv("USE_EXTERNAL_ONLY", "false").lower() == "true"
+
+# Hugging Face Inference API Token
+HF_TOKEN = os.getenv("HF_TOKEN")

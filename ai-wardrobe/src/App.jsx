@@ -9,6 +9,8 @@ import { OrderProvider } from "@/context/OrderContext";
 import { CartProvider } from "@/context/CartContext";
 import { WishlistProvider } from "@/context/WishlistContext";
 import { ProfileProvider } from "@/context/ProfileContext";
+import { AuthProvider, useAuth } from "./context/AuthContext";
+import AuthPage from "./pages/Auth";
 import Index from "./pages/Index";
 import MenPage from "./pages/Men";
 import WomenPage from "./pages/Women";
@@ -26,40 +28,60 @@ import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
+const AppContent = () => {
+  const { user } = useAuth();
+
+  if (!user) {
+    return (
+      <>
+        <Toaster />
+        <Sonner />
+        <AuthPage />
+      </>
+    );
+  }
+
+  return (
+    <BrowserRouter>
+      <Navbar />
+      <Routes>
+        <Route path="/" element={<Index />} />
+        <Route path="/men" element={<MenPage />} />
+        <Route path="/women" element={<WomenPage />} />
+        <Route path="/wardrobe" element={<WardrobePage />} />
+        <Route path="/upload" element={<UploadPage />} />
+        <Route path="/tryon" element={<TryOnPage />} />
+        <Route path="/search" element={<SearchResults />} />
+        <Route path="/product/:productId" element={<ProductDetail />} />
+        <Route path="/cart" element={<CartPage />} />
+        <Route path="/wishlist" element={<WishlistPage />} />
+        <Route path="/profile" element={<ProfilePage />} />
+        <Route path="/orders" element={<OrdersPage />} />
+        <Route path="/settings" element={<SettingsPage />} />
+        <Route path="*" element={<NotFound />} />
+      </Routes>
+      <Footer />
+    </BrowserRouter>
+  );
+};
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <OrderProvider>
-      <TooltipProvider>
-        <CartProvider>
-          <WishlistProvider>
-            <ProfileProvider>
-              <Toaster />
-              <Sonner />
-            <BrowserRouter>
-              <Navbar />
-              <Routes>
-                <Route path="/" element={<Index />} />
-                <Route path="/men" element={<MenPage />} />
-                <Route path="/women" element={<WomenPage />} />
-                <Route path="/wardrobe" element={<WardrobePage />} />
-                <Route path="/upload" element={<UploadPage />} />
-                <Route path="/tryon" element={<TryOnPage />} />
-                <Route path="/search" element={<SearchResults />} />
-                <Route path="/product/:productId" element={<ProductDetail />} />
-                <Route path="/cart" element={<CartPage />} />
-                <Route path="/wishlist" element={<WishlistPage />} />
-                <Route path="/profile" element={<ProfilePage />} />
-                <Route path="/orders" element={<OrdersPage />} />
-                <Route path="/settings" element={<SettingsPage />} />
-                <Route path="*" element={<NotFound />} />
-              </Routes>
-              <Footer />
-            </BrowserRouter>
-          </ProfileProvider>
-        </WishlistProvider>
-      </CartProvider>
-    </TooltipProvider>
-    </OrderProvider>
+    <AuthProvider>
+      <OrderProvider>
+        <TooltipProvider>
+          <CartProvider>
+            <WishlistProvider>
+              <ProfileProvider>
+                <Toaster />
+                <Sonner />
+                <AppContent />
+              </ProfileProvider>
+            </WishlistProvider>
+          </CartProvider>
+        </TooltipProvider>
+      </OrderProvider>
+    </AuthProvider>
   </QueryClientProvider>
 );
 

@@ -5,7 +5,7 @@ import { api } from "@/lib/api";
 import { shuffleArray } from "@/lib/shuffle";
 
 interface CategoryPageProps {
-  category: "men" | "women";
+  category: "men" | "women" | "kids";
   title: string;
   subtitle: string;
 }
@@ -22,8 +22,8 @@ export function CategoryPage({ category, title, subtitle }: CategoryPageProps) {
     const fetchAllProducts = async () => {
       try {
         setLoading(true);
-        const data = await api.getProducts({ gender: category, limit: 100 });
-        const uniqueSubcategories = [...new Set(data.map((p) => p.subcategory).filter(Boolean))];
+        const data = await api.getProducts({ gender: category, limit: 100 }) as any[];
+        const uniqueSubcategories = [...new Set(data.map((p) => p.subcategory).filter(Boolean))] as string[];
         setAllSubcategories(uniqueSubcategories.sort());
         setError(null);
       } catch (err) {

@@ -1,5 +1,5 @@
-import menImg from "@/assets/category-men.svg";
-import womenImg from "@/assets/category-women.svg";
+import menImg from "@/assets/men-fashion.png";
+import womenImg from "@/assets/women-fashion.png";
 
 export const categoryCards = [
   {

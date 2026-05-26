@@ -13,7 +13,7 @@ import urllib3
 # Suppress InsecureRequestWarning when verify=False is used
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-from services.supabase_service import seed_products, get_products, get_product_by_id
+from services.supabase_service import seed_products, get_products, get_product_by_id, clean_amazon_image_url
 from services.external_api_service import fetch_products_rapidapi, fetch_products_from_all_sources, has_external_sources
 from config import USE_EXTERNAL_ONLY
 
@@ -23,10 +23,12 @@ executor = ThreadPoolExecutor(max_workers=2)
 
 def _map_product_image(item):
     if isinstance(item, dict):
-        if not item.get("image") and item.get("image_url"):
-            item["image"] = item.get("image_url")
-        elif not item.get("image_url") and item.get("image"):
-            item["image_url"] = item.get("image")
+        # Extract the image URL safely
+        img_url = item.get("image_url") or item.get("image") or ""
+        if img_url:
+            cleaned = clean_amazon_image_url(img_url)
+            item["image"] = cleaned
+            item["image_url"] = cleaned
     return item
 
 

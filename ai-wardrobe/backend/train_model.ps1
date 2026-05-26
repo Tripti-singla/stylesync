@@ -31,8 +31,7 @@ function Write-Warning {
 }
 
 # Set working directory
-$BackendDir = "c:\stylesync\ai-wardrobe\backend"
-$RootDir = "c:\stylesync\ai-wardrobe"
+$BackendDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 
 # Check if backend directory exists
 if (-not (Test-Path $BackendDir)) {

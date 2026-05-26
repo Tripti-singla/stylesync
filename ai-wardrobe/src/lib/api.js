@@ -72,6 +72,7 @@ export const mapProduct = (rawProduct) => {
     originalPrice: rawProduct.originalPrice ?? rawProduct.original_price ?? rawProduct.list_price ?? null,
     description: rawProduct.description || rawProduct.summary || "Look sharp in this premium piece.",
     sizes: rawProduct.sizes || (rawProduct.size_chart ? Object.keys(rawProduct.size_chart) : ["S", "M", "L", "XL"]),
+    productUrl: rawProduct.affiliate_link || rawProduct.product_url || rawProduct.productUrl || rawProduct.url || "",
   };
 };
 
@@ -194,6 +195,61 @@ export const api = {
     if (!res.ok) {
       const errorBody = await res.text().catch(() => "");
       throw new Error(`Failed to fetch OpenAI recommendations (${res.status}): ${errorBody || res.statusText}`);
+    }
+    return res.json();
+  },
+
+  getWardrobeItems: async (userId) => {
+    const res = await fetch(`${BASE_URL}/api/wardrobe/items?user_id=${encodeURIComponent(userId)}`);
+    if (!res.ok) {
+      const errorBody = await res.text().catch(() => "");
+      throw new Error(`Failed to fetch wardrobe items (${res.status}): ${errorBody || res.statusText}`);
+    }
+    return res.json();
+  },
+
+  deleteWardrobeItem: async (itemId, userId) => {
+    const res = await fetch(`${BASE_URL}/api/wardrobe/items/${encodeURIComponent(itemId)}?user_id=${encodeURIComponent(userId)}`, {
+      method: "DELETE",
+    });
+    if (!res.ok) {
+      const errorBody = await res.text().catch(() => "");
+      throw new Error(`Failed to delete wardrobe item (${res.status}): ${errorBody || res.statusText}`);
+    }
+    return res.json();
+  },
+
+  getWishlist: async (userId) => {
+    const res = await fetch(`${BASE_URL}/api/wishlist?user_id=${encodeURIComponent(userId)}`);
+    if (!res.ok) {
+      const errorBody = await res.text().catch(() => "");
+      throw new Error(`Failed to fetch wishlist (${res.status}): ${errorBody || res.statusText}`);
+    }
+    return res.json();
+  },
+
+  addToWishlist: async (userId, productId) => {
+    const res = await fetch(`${BASE_URL}/api/wishlist`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ user_id: userId, product_id: String(productId) }),
+    });
+    if (!res.ok) {
+      const errorBody = await res.text().catch(() => "");
+      throw new Error(`Failed to add to wishlist (${res.status}): ${errorBody || res.statusText}`);
+    }
+    return res.json();
+  },
+
+  removeFromWishlist: async (userId, productId) => {
+    const res = await fetch(`${BASE_URL}/api/wishlist/${encodeURIComponent(productId)}?user_id=${encodeURIComponent(userId)}`, {
+      method: "DELETE",
+    });
+    if (!res.ok) {
+      const errorBody = await res.text().catch(() => "");
+      throw new Error(`Failed to remove from wishlist (${res.status}): ${errorBody || res.statusText}`);
     }
     return res.json();
   },

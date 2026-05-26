@@ -12,6 +12,19 @@ def _as_list(value):
     return [value]
 
 
+def get_complementary_categories(category: str) -> List[str]:
+    cat = (category or "").lower()
+    if cat == "topwear":
+        return ["bottomwear", "footwear", "accessories"]
+    elif cat == "bottomwear":
+        return ["topwear", "footwear", "accessories"]
+    elif cat == "ethnic":
+        return ["footwear", "accessories"]
+    elif cat in ("footwear", "accessories"):
+        return ["topwear", "bottomwear", "ethnic"]
+    return []
+
+
 def _score_item(item: Dict, occasion: str, category: str = None, primary_color: str = None, tags: List[str] = None) -> int:
     score = 0
     occasion_l = (occasion or "").lower()
@@ -26,8 +39,12 @@ def _score_item(item: Dict, occasion: str, category: str = None, primary_color: 
 
     if occasion_l and occasion_l in item_occasion:
         score += 40
-    if category_l and category_l == item_category:
+    
+    # Give higher score to complementary categories for outfit pairing
+    comp_cats = get_complementary_categories(category_l)
+    if comp_cats and item_category in comp_cats:
         score += 20
+        
     if primary_color_l and item_primary_color and primary_color_l == item_primary_color:
         score += 10
 
@@ -54,13 +71,23 @@ def build_outfit_matches(
     primary_color: str = None,
     tags: List[str] = None,
     limit: int = 10,
+    exclude_item_id: str = None,
 ) -> Dict:
 
     # 🔹 Wardrobe
     wardrobe_items = get_wardrobe(user_id) or []
 
+    # Filter out query item by ID and other items of the same category (no top-on-top matching)
+    filtered_wardrobe = []
+    for item in wardrobe_items:
+        if exclude_item_id and str(item.get("id")) == str(exclude_item_id):
+            continue
+        if category and item.get("category") == category:
+            continue
+        filtered_wardrobe.append(item)
+
     ranked_wardrobe = _rank_items(
-        wardrobe_items,
+        filtered_wardrobe,
         occasion,
         category,
         primary_color,
@@ -69,22 +96,25 @@ def build_outfit_matches(
 
     strong_matches = [item for item in ranked_wardrobe if item.get("match_score", 0) >= 40][:limit]
 
-    if strong_matches:
-        return {
-            "strategy": "wardrobe_first",
-            "occasion": occasion,
-            "wardrobe_matches": strong_matches,
-            "external_matches": [],
-            "message": "Found good matching items in your wardrobe.",
-        }
-
-    # 🔹 DB products
-    external_items = get_products(
-        search=occasion,
-        category=category,
-        gender=gender,
-        limit=max(limit * 2, limit),
-    ) or []
+    # 🔹 DB products of complementary categories
+    comp_cats = get_complementary_categories(category)
+    external_items = []
+    if comp_cats:
+        for comp_cat in comp_cats:
+            items = get_products(
+                search=occasion,
+                category=comp_cat,
+                gender=gender,
+                limit=limit,
+            ) or []
+            external_items.extend(items)
+    else:
+        external_items = get_products(
+            search=occasion,
+            category=category,
+            gender=gender,
+            limit=max(limit * 2, limit),
+        ) or []
 
     # 🔹 RapidAPI
     try:
@@ -96,7 +126,12 @@ def build_outfit_matches(
     external_items = external_items + rapid_items
 
     if not external_items:
-        external_items = get_products(category=category, gender=gender, limit=max(limit * 3, 24)) or []
+        if comp_cats:
+            for comp_cat in comp_cats:
+                items = get_products(category=comp_cat, gender=gender, limit=max(limit * 3, 24)) or []
+                external_items.extend(items)
+        else:
+            external_items = get_products(category=category, gender=gender, limit=max(limit * 3, 24)) or []
 
     if not external_items:
         external_items = get_products(limit=max(limit * 3, 24)) or []
@@ -108,6 +143,15 @@ def build_outfit_matches(
         primary_color,
         tags,
     )
+
+    if strong_matches:
+        return {
+            "strategy": "wardrobe_first",
+            "occasion": occasion,
+            "wardrobe_matches": strong_matches,
+            "external_matches": ranked_external[:limit],
+            "message": "Found good matching items in your wardrobe.",
+        }
 
     return {
         "strategy": "external_fallback",

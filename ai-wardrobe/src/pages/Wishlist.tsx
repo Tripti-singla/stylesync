@@ -46,7 +46,7 @@ export default function WishlistPage() {
             <div className="p-3">
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{product.brand}</p>
               <h3 className="text-sm font-medium text-foreground mt-1 truncate">{product.name}</h3>
-              <p className="text-sm font-bold text-foreground mt-1">₹{product.price}</p>
+              <p className="text-sm font-bold text-foreground mt-1">${product.price}</p>
               <button
                 onClick={() => { addToCart(product); toast.success("Added to cart"); }}
                 className="w-full mt-2 py-2 rounded-md bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 transition-colors flex items-center justify-center gap-1"

@@ -89,7 +89,7 @@ export default function OrdersPage() {
                               <p className="font-medium text-foreground">{item.name}</p>
                               <p className="text-xs text-muted-foreground">{item.brand}</p>
                             </div>
-                            <span className="text-sm font-semibold text-foreground">₹{item.price * item.quantity}</span>
+                            <span className="text-sm font-semibold text-foreground">${item.price * item.quantity}</span>
                           </div>
                           <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
                             <span>Qty {item.quantity}</span>
@@ -137,7 +137,7 @@ export default function OrdersPage() {
 
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between pt-4 border-t border-border">
                   <div className="text-sm text-muted-foreground">
-                    Total: <span className="font-semibold text-foreground">₹{order.total}</span>
+                    Total: <span className="font-semibold text-foreground">${order.total}</span>
                   </div>
                   <div className="flex flex-wrap gap-2">
                     <button className="inline-flex items-center gap-2 px-4 py-2 text-sm border border-border rounded-md hover:bg-muted transition-colors">

@@ -4,8 +4,8 @@ import { Search, Heart, ShoppingBag, User, Menu, X } from "lucide-react";
 // eslint-disable-next-line no-unused-vars
 import { motion, AnimatePresence } from "framer-motion";
 import { HangerIcon } from "./HangerIcon";
-import { useCart } from "@/context/CartContext";
 import { useWishlist } from "@/context/WishlistContext";
+import { useAuth } from "@/context/AuthContext";
 
 const navLinks = [
   { name: "Home", path: "/" },
@@ -16,7 +16,6 @@ const navLinks = [
 
 const profileMenuItems = [
   { label: "My Profile", path: "/profile" },
-  { label: "My Orders", path: "/orders" },
   { label: "Settings", path: "/settings" },
 ];
 
@@ -28,8 +27,8 @@ export function Navbar() {
   const profileRef = useRef(null);
   const location = useLocation();
   const navigate = useNavigate();
-  const { totalItems } = useCart();
   const { items: wishlistItems } = useWishlist();
+  const { signOut } = useAuth();
 
   useEffect(() => {
     function handleClickOutside(e) {
@@ -119,14 +118,7 @@ export function Navbar() {
             <HangerIcon className="w-5 h-5 text-foreground/70" />
           </Link>
 
-          <Link to="/cart" className="p-2 rounded-md hover:bg-muted transition-colors relative" title="Cart">
-            <ShoppingBag className="w-5 h-5 text-foreground/70" />
-            {totalItems > 0 && (
-              <span className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-primary text-primary-foreground text-[10px] font-bold flex items-center justify-center">
-                {totalItems}
-              </span>
-            )}
-          </Link>
+
 
           <div ref={profileRef} className="relative hidden sm:block">
             <button
@@ -154,6 +146,15 @@ export function Navbar() {
                       {item.label}
                     </Link>
                   ))}
+                  <button
+                    onClick={() => {
+                      setProfileOpen(false);
+                      signOut();
+                    }}
+                    className="w-full text-left block px-4 py-2.5 text-sm font-sans font-medium text-red-500 hover:bg-muted hover:text-red-600 transition-colors"
+                  >
+                    Sign Out
+                  </button>
                 </motion.div>
               )}
             </AnimatePresence>
@@ -199,6 +200,15 @@ export function Navbar() {
                     {item.label}
                   </Link>
                 ))}
+                <button
+                  onClick={() => {
+                    setMobileOpen(false);
+                    signOut();
+                  }}
+                  className="w-full text-left block px-4 py-3 text-sm font-sans font-medium text-red-500 hover:bg-muted rounded-md"
+                >
+                  Sign Out
+                </button>
               </div>
             </div>
           </motion.nav>

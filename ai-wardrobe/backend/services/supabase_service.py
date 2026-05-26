@@ -17,6 +17,23 @@ def is_valid_uuid(val):
         return False
 
 
+def clean_amazon_image_url(url: str) -> str:
+    if not url or not isinstance(url, str):
+        return url or ""
+    url_lower = url.lower()
+    if "amazon" in url_lower or "media-amazon" in url_lower:
+        parts = url.split('/')
+        if parts:
+            filename = parts[-1]
+            file_parts = filename.split('.')
+            if len(file_parts) > 2:
+                # Keep only first and last parts (removes dynamic resizing suffix segments)
+                clean_filename = file_parts[0] + '.' + file_parts[-1]
+                parts[-1] = clean_filename
+                url = '/'.join(parts)
+    return url
+
+
 def _normalize_db_product(row: dict) -> dict:
     if not row:
         return {}
@@ -52,7 +69,7 @@ def _normalize_db_product(row: dict) -> dict:
     if not image_url:
         image_url = row.get("image_url") or ""
         
-    normalized["image_url"] = image_url
+    normalized["image_url"] = clean_amazon_image_url(image_url)
     
     # 5. Price
     try:
@@ -206,6 +223,25 @@ def seed_products():
     }
 
 
+def _int_id_to_uuid(int_id) -> str:
+    try:
+        val = int(int_id)
+        return f"00000000-0000-0000-0000-{val:012d}"
+    except (ValueError, TypeError):
+        return str(int_id)
+
+
+def _uuid_to_int_id(uuid_str: str) -> str:
+    if not uuid_str:
+        return ""
+    if uuid_str.startswith("00000000-0000-0000-0000-"):
+        try:
+            return str(int(uuid_str.split("-")[-1]))
+        except ValueError:
+            pass
+    return uuid_str
+
+
 def get_product_by_id(product_id: str):
     if not supabase:
         return None
@@ -240,15 +276,127 @@ def get_products(search: str = None, category: str = None, gender: str = None, s
     if subcategory:
         query = query.ilike("breadcrumbs", f"%{subcategory}%")
 
+    # Increase query limit for ranking when search is active
     db_limit = limit * 3 if gender else limit
+    if search:
+        db_limit = 1000
 
     try:
         data = query.limit(db_limit).execute().data or []
         normalized = [_normalize_db_product(row) for row in data]
+        
+        # Filter by gender in normalized objects if specified
         if gender:
             g_lower = gender.lower()
             normalized = [row for row in normalized if row.get("gender") == g_lower]
+
+        # Prioritize matching logic
+        if search:
+            s_lower = search.lower()
+            
+            def get_search_score(item):
+                title = (item.get("title") or "").lower()
+                desc = (item.get("description") or "").lower()
+                if s_lower == title:
+                    return 5
+                elif f" {s_lower} " in f" {title} ":
+                    return 4
+                elif s_lower in title:
+                    return 3
+                elif f" {s_lower} " in f" {desc} ":
+                    return 2
+                elif s_lower in desc:
+                    return 1
+                return 0
+
+            normalized.sort(key=get_search_score, reverse=True)
+            normalized = [item for item in normalized if get_search_score(item) > 0]
+
         return normalized[:limit]
     except Exception as e:
         print("Error in get_products:", e)
         return []
+
+
+def delete_wardrobe_item(item_id: str, user_id: str) -> bool:
+    if not supabase:
+        return False
+    if not is_valid_uuid(user_id):
+        print(f"Cannot delete_wardrobe_item: user_id '{user_id}' is not a valid UUID")
+        return False
+    try:
+        if is_valid_uuid(item_id):
+            supabase.table("wardrobe_items").delete().eq("id", item_id).eq("user_id", user_id).execute()
+            return True
+        return False
+    except Exception as e:
+        print("Error in delete_wardrobe_item:", e)
+        return False
+
+
+def get_wishlist(user_id: str):
+    if not supabase:
+        return []
+    if not is_valid_uuid(user_id):
+        print(f"Skipping get_wishlist: user_id '{user_id}' is not a valid UUID")
+        return []
+    try:
+        wishlist_data = supabase.table("wishlist").select("product_id").eq("user_id", user_id).execute().data or []
+        db_ids = []
+        for item in wishlist_data:
+            uuid_id = item.get("product_id")
+            if uuid_id:
+                int_id = _uuid_to_int_id(uuid_id)
+                try:
+                    db_ids.append(int(int_id))
+                except ValueError:
+                    pass
+        if not db_ids:
+            return []
+        
+        products_data = supabase.table("products").select("*").in_("id", db_ids).execute().data or []
+        id_to_product = {str(p.get("id")): _normalize_db_product(p) for p in products_data}
+        ordered_products = []
+        for item in wishlist_data:
+            uuid_id = item.get("product_id")
+            int_id = _uuid_to_int_id(uuid_id)
+            if int_id in id_to_product:
+                ordered_products.append(id_to_product[int_id])
+        return ordered_products
+    except Exception as e:
+        print("Error in get_wishlist:", e)
+        return []
+
+
+def add_to_wishlist(user_id: str, product_id: str):
+    if not supabase:
+        return None
+    if not is_valid_uuid(user_id):
+        print(f"Cannot add_to_wishlist: user_id '{user_id}' is not a valid UUID")
+        return None
+    try:
+        uuid_product_id = _int_id_to_uuid(product_id)
+        res = supabase.table("wishlist").insert({
+            "user_id": user_id,
+            "product_id": uuid_product_id
+        }).execute()
+        return res.data[0] if res.data else None
+    except Exception as e:
+        print("Error in add_to_wishlist:", e)
+        return None
+
+
+def remove_from_wishlist(user_id: str, product_id: str) -> bool:
+    if not supabase:
+        return False
+    if not is_valid_uuid(user_id):
+        print(f"Cannot remove_from_wishlist: user_id '{user_id}' is not a valid UUID")
+        return False
+    try:
+        uuid_product_id = _int_id_to_uuid(product_id)
+        supabase.table("wishlist").delete().eq("user_id", user_id).eq("product_id", uuid_product_id).execute()
+        return True
+    except Exception as e:
+        print("Error in remove_from_wishlist:", e)
+        return False
+

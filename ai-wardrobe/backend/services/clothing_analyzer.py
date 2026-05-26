@@ -3,7 +3,7 @@ import logging
 import requests
 import json
 from pathlib import Path
-from config import OPENAI_API_KEY
+from config import OPENAI_API_KEY, GEMINI_API_KEY
 
 logger = logging.getLogger(__name__)
 
@@ -158,6 +158,114 @@ def _get_fallback_analysis():
     }
 
 
+def analyze_clothing_with_gemini(image_base64: str, media_type: str):
+    if not GEMINI_API_KEY:
+        raise ValueError("GEMINI_API_KEY not set")
+
+    prompt = """Analyze this clothing item and return a JSON object with exactly these fields:
+{
+    "category": "category_name",
+    "colors": ["color1", "color2"],
+    "primary_color": "dominant_color",
+    "occasion": ["occasion1", "occasion2"],
+    "season": ["season1"],
+    "tags": ["tag1", "tag2", "tag3"],
+    "style": "style_description",
+    "brand_hint": "brand_if_visible_or_null",
+    "description": "brief_description"
+}
+
+Categories: tops, shirts, t-shirts, dresses, pants, jeans, skirts, jackets, coats, hoodies, sweaters, blazers, suits, shoes, boots, sandals, accessories
+Occasions: casual, formal, business, party, evening, sports, outdoor, beach, gym, everyday
+Seasons: summer, winter, spring, autumn, all-season
+
+Return only valid JSON, no other text."""
+
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
+    headers = {"Content-Type": "application/json"}
+    payload = {
+        "contents": [
+            {
+                "role": "user",
+                "parts": [
+                    {
+                        "inlineData": {
+                            "mimeType": media_type,
+                            "data": image_base64
+                        }
+                    },
+                    {
+                        "text": prompt
+                    }
+                ]
+            }
+        ],
+        "generationConfig": {
+            "responseMimeType": "application/json",
+            "temperature": 0.4,
+            "maxOutputTokens": 500
+        }
+    }
+
+    response = requests.post(url, headers=headers, json=payload, timeout=30)
+    response.raise_for_status()
+    resp_json = response.json()
+    
+    try:
+        content = resp_json["candidates"][0]["content"]["parts"][0]["text"]
+    except (KeyError, IndexError) as e:
+        raise ValueError(f"Failed to parse Gemini response: {resp_json}") from e
+
+    content_clean = content.strip()
+    if content_clean.startswith("```"):
+        lines = content_clean.splitlines()
+        if lines[0].startswith("```"):
+            lines = lines[1:]
+        if lines and lines[-1].startswith("```"):
+            lines = lines[:-1]
+        content_clean = "\n".join(lines).strip()
+
+    result = json.loads(content_clean)
+    return {
+        "category": result.get("category", "clothing").lower(),
+        "colors": result.get("colors", ["unknown"]),
+        "primary_color": result.get("primary_color", result.get("colors", ["gray"])[0]).lower(),
+        "occasion": result.get("occasion", ["casual"]),
+        "season": result.get("season", ["all-season"]),
+        "tags": result.get("tags", []),
+        "style": result.get("style", ""),
+        "brand_hint": result.get("brand_hint"),
+        "description": result.get("description", ""),
+        "analysis_method": "gemini-1.5-flash"
+    }
+
+
 def analyze_clothing(image_url=None, image_file=None):
-    """Main function to analyze clothing. Tries GPT first, falls back if needed."""
+    """Main function to analyze clothing. Tries Gemini first, then GPT/OpenAI, falls back if needed."""
+    if GEMINI_API_KEY:
+        try:
+            logger.info("Attempting Gemini API for clothing analysis...")
+            if image_file:
+                image_base64 = _encode_image_to_base64(image_file)
+                media_type = "image/png"  # Assume PNG from upload
+            elif image_url:
+                image_base64 = _encode_image_to_base64(image_url)
+                # Detect media type from URL
+                if image_url.lower().endswith('.jpg') or image_url.lower().endswith('.jpeg'):
+                    media_type = "image/jpeg"
+                elif image_url.lower().endswith('.png'):
+                    media_type = "image/png"
+                elif image_url.lower().endswith('.webp'):
+                    media_type = "image/webp"
+                elif image_url.lower().endswith('.gif'):
+                    media_type = "image/gif"
+                else:
+                    media_type = "image/jpeg"  # Default
+            else:
+                return _get_fallback_analysis()
+            
+            return analyze_clothing_with_gemini(image_base64, media_type)
+        except Exception as e:
+            logger.error("Gemini clothing analysis failed: %s. Falling back to OpenAI...", e)
+
     return analyze_clothing_with_gpt(image_url, image_file)

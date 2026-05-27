@@ -101,23 +101,7 @@ def _load_image_from_upload(file_data) -> Image.Image:
 
 
 def _load_sample_records() -> list:
-    samples = get_tryon_samples(limit=500)
-    if not samples:
-        # Fallback to local disk storage if database is disconnected
-        import glob
-        local_samples = []
-        body_files = list(IMAGES_DIR.glob("body_*.png"))
-        for body_file in body_files:
-            sample_id = body_file.stem.replace("body_", "")
-            clothing_file = IMAGES_DIR / f"clothing_{sample_id}.png"
-            if clothing_file.exists():
-                local_samples.append({
-                    "sample_id": sample_id,
-                    "body_image_path": str(body_file.relative_to(BASE_DIR)).replace("\\", "/"),
-                    "clothing_image_path": str(clothing_file.relative_to(BASE_DIR)).replace("\\", "/"),
-                })
-        samples = local_samples
-    return samples
+    return get_tryon_samples(limit=500)
 
 
 def _resolve_sample_image(entry: dict, path_key: str, url_key: str):
@@ -208,29 +192,78 @@ def _encode_image_to_base64(image: Image.Image) -> str:
     image.save(output, format="PNG")
     return base64.b64encode(output.getvalue()).decode("utf-8")
 
-def _remove_body_background(img: Image.Image) -> Image.Image:
-    if img.mode != "RGBA":
-        img = img.convert("RGBA")
-    try:
-        from rembg import remove
-        return remove(img)
-    except Exception as e:
-        return img
 
 def _remove_garment_background(img: Image.Image) -> Image.Image:
     """
-    Strips the background from the garment image using robust AI segmentation (rembg).
-    This handles fake checkered backgrounds, mannequins, and complex scenes.
+    Strips white, light-gray, or uniform background colors from the garment image,
+    creating a clean transparent alpha channel for seamless blending.
     """
     if img.mode != "RGBA":
         img = img.convert("RGBA")
-    try:
-        from rembg import remove
-        return remove(img)
-    except Exception as e:
-        import logging
-        logging.getLogger(__name__).warning(f"rembg failed to remove background: {e}")
+    
+    w, h = img.size
+    samples = []
+    # Sample edges for background color detection
+    for x in (0, 1, 2, w-1, w-2, w-3):
+        for y in (0, 1, 2, h-1, h-2, h-3):
+            if 0 <= x < w and 0 <= y < h:
+                samples.append(img.getpixel((x, y)))
+            
+    if not samples:
         return img
+        
+    avg_r = sum(s[0] for s in samples) // len(samples)
+    avg_g = sum(s[1] for s in samples) // len(samples)
+    avg_b = sum(s[2] for s in samples) // len(samples)
+    
+    is_light = avg_r > 180 and avg_g > 180 and avg_b > 180
+    is_dark = avg_r < 70 and avg_g < 70 and avg_b < 70
+    
+    datas = img.getdata()
+    new_data = []
+    
+    for item in datas:
+        r, g, b, a = item
+        if a == 0:
+            new_data.append(item)
+            continue
+            
+        dist_bg = ((r - avg_r)**2 + (g - avg_g)**2 + (b - avg_b)**2)**0.5
+        dist_white = ((r - 255)**2 + (g - 255)**2 + (b - 255)**2)**0.5
+        
+        if is_light:
+            if dist_white < 25 or dist_bg < 30 or (r > 240 and g > 240 and b > 240):
+                new_data.append((r, g, b, 0))
+            elif dist_bg < 60:
+                factor = (dist_bg - 25) / 35.0
+                new_data.append((r, g, b, int(a * max(0.0, min(1.0, factor)))))
+            else:
+                new_data.append(item)
+        elif is_dark:
+            if dist_bg < 30 or (r < 25 and g < 25 and b < 25):
+                new_data.append((r, g, b, 0))
+            elif dist_bg < 60:
+                factor = (dist_bg - 30) / 30.0
+                new_data.append((r, g, b, int(a * max(0.0, min(1.0, factor)))))
+            else:
+                new_data.append(item)
+        else:
+            if dist_white < 25 or (r > 242 and g > 242 and b > 242):
+                new_data.append((r, g, b, 0))
+            elif r > 230 and g > 230 and b > 230:
+                factor = (r + g + b - 690) / 75.0
+                factor = max(0.0, min(1.0, 1.0 - factor))
+                new_data.append((r, g, b, int(a * factor)))
+            else:
+                new_data.append(item)
+                
+    img.putdata(new_data)
+    
+    # Smooth boundaries using a Gaussian-blurred alpha channel mask
+    alpha = img.split()[3]
+    alpha_blurred = alpha.filter(ImageFilter.GaussianBlur(1.0))
+    img.putalpha(alpha_blurred)
+    return img
 
 
 def _compose_try_on(body: Image.Image, clothing: Image.Image) -> Image.Image:
@@ -268,13 +301,32 @@ def _compose_try_on(body: Image.Image, clothing: Image.Image) -> Image.Image:
 
     w, h = body.size
 
-    # Use robust AI segmentation for the body silhouette instead of color thresholding
-    # This perfectly handles white clothing, varying backgrounds, and skin tones.
-    body_no_bg = _remove_garment_background(body)
-    silhouette = body_no_bg.split()[3]
-    
-    # We still need sil_data for the loop logic (or we can just use getpixel directly, 
-    # but the existing code uses silhouette.getpixel anyway later).
+    # Estimate human background color from corners
+    corner_samples = []
+    for x in (0, 1, 2, w-1, w-2, w-3):
+        for y in (0, 1, 2, h-1, h-2, h-3):
+            if 0 <= x < w and 0 <= y < h:
+                corner_samples.append(body.getpixel((x, y)))
+    if not corner_samples:
+        corner_samples = [(255, 255, 255, 255)]
+        
+    avg_r = sum(s[0] for s in corner_samples) // len(corner_samples)
+    avg_g = sum(s[1] for s in corner_samples) // len(corner_samples)
+    avg_b = sum(s[2] for s in corner_samples) // len(corner_samples)
+
+    # Create silhouette mask (255 for body, 0 for background)
+    silhouette = Image.new("L", (w, h), 0)
+    sil_data = []
+    for r, g, b, a in body.getdata():
+        if a == 0:
+            sil_data.append(0)
+            continue
+        dist_bg = ((r - avg_r)**2 + (g - avg_g)**2 + (b - avg_b)**2)**0.5
+        if dist_bg > 30 and (r < 242 or g < 242 or b < 242):
+            sil_data.append(255)
+        else:
+            sil_data.append(0)
+    silhouette.putdata(sil_data)
 
     # Smooth the silhouette using BoxBlur
     silhouette = silhouette.filter(ImageFilter.BoxBlur(4))
@@ -324,67 +376,37 @@ def _compose_try_on(body: Image.Image, clothing: Image.Image) -> Image.Image:
             found_neck = True
 
     if found_neck:
-        # Instead of a small multiplier, scan down from the neck to find the max width
-        # in the upper torso area to represent the true shoulders.
-        max_shoulder_width = 0
-        max_shoulder_y = neck_y
-        for y in range(neck_y, min(neck_y + int(h * 0.15), h)):
-            if row_widths[y] > max_shoulder_width:
-                max_shoulder_width = row_widths[y]
-                max_shoulder_y = y
-        
-        # If the detected shoulder width is too small (less than 30% of image width),
-        # use a safe fallback based on the image size.
-        if max_shoulder_width < w * 0.3:
-            shoulders_y = int(h * 0.28)
-            shoulder_width = int(w * 0.5)
-        else:
-            shoulders_y = max_shoulder_y
-            shoulder_width = max_shoulder_width
+        for y in range(neck_y, min(neck_y + 120, h)):
+            if row_widths[y] >= min_width * 1.35:
+                shoulders_y = y
+                shoulder_width = row_widths[y]
+                break
     else:
         neck_y = int(h * 0.23)
         neck_x = w // 2
         shoulders_y = int(h * 0.29)
-        shoulder_width = int(w * 0.5)
+        shoulder_width = int(w * 0.62)
 
     print(f"STAGE: Torso analysis: Neck center=({neck_x}, {neck_y}), Shoulders Y={shoulders_y}, Shoulder Width={shoulder_width}")
 
-    # 1. Biometric scaling: rembg often includes shadows in shoulder_width, making it artificially huge.
-    # We use head width to calculate true shoulder width (shoulders are ~2.8x head width).
-    head_widths = [row_widths[y] for y in range(max(0, neck_y - int(h*0.05)), neck_y + 10) if row_widths[y] > 0]
-    head_w = max(head_widths) if head_widths else int(w * 0.15)
-    true_shoulder_w = head_w * 2.8
-
-    # HARDCODED LOGIC FOR DEMO EVALUATION (As requested for the custom image)
+    # Scale garment proportionally (maintain aspect ratio) to match shoulder width
     gc_w, gc_h = garment_cropped.size
     
-    # 1. Scale
-    # We make the target width 1.0x the shoulder width. This ensures the straps 
-    # sit perfectly on her shoulders.
-    target_g_w = int(true_shoulder_w * 1.0) 
-    scale_factor = target_g_w / gc_w if gc_w > 0 else 1.0
+    # 8. Avoid oversized overlays: target garment width is 82% of shoulder width
+    target_g_w = int(shoulder_width * 0.82)
+    scale_factor = target_g_w / gc_w
     target_g_h = int(gc_h * scale_factor)
 
-    print(f"STAGE: DEMO SCALING: {gc_w}x{gc_h} scaled to {target_g_w}x{target_g_h}")
+    print(f"STAGE: Proportional scaling: {gc_w}x{gc_h} scaled to {target_g_w}x{target_g_h} (Preserving Aspect Ratio)")
     aligned_g = garment_cropped.resize((target_g_w, target_g_h), Image.Resampling.LANCZOS)
 
-    # 2. Alpha Erasure of the Hanger
-    # In the provided image, the hanger hook and arms occupy exactly the top 23% of the image.
-    # We erase the top 23% by making it completely transparent, flawlessly removing the hanger!
-    pixels = aligned_g.load()
-    erase_height = int(target_g_h * 0.23)
-    for y in range(erase_height):
-        for x in range(target_g_w):
-            r, g, b, a = pixels[x, y]
-            pixels[x, y] = (r, g, b, 0)
-
-    # 3. Position
-    # Center horizontally
+    # Position garment neck/collar over the detected neckline constriction
     x_pos = neck_x - (target_g_w // 2)
     
-    # Place vertically: Since the straps start exactly where the hanger ends (23% down),
-    # we shift the image up so the 23% mark rests perfectly on her shoulders!
-    y_pos = shoulders_y - int(target_g_h * 0.23)
+    # Neckline collar alignment: center neckline with shoulders y-offset safely
+    y_pos = int(neck_y - (target_g_h * 0.04))
+    # Constrain positioning so it doesn't shift too high above neck
+    y_pos = max(y_pos, head_top + 20)
 
     # Save aligned garment canvas ( garment overlay on transparent body-sized canvas )
     aligned_canvas = Image.new("RGBA", (w, h), (0, 0, 0, 0))
@@ -463,9 +485,35 @@ def save_tryon_sample(user_id: str, category: str = None, body_image_url: str = 
 from typing import Optional
 
 def get_hf_token() -> str:
-    # Check environment variable first
-    token = os.environ.get("HF_TOKEN", "")
-    return token
+    """
+    Dynamically loads HF_TOKEN from .env file to prevent having to restart the backend server
+    when the user modifies the .env file.
+    """
+    try:
+        from dotenv import load_dotenv
+        import os
+        from pathlib import Path
+        
+        # Resolve backend directory relative to this service file
+        backend_dir = Path(__file__).resolve().parent.parent
+        env_path = backend_dir / ".env"
+        if env_path.exists():
+            load_dotenv(env_path, override=True)
+        else:
+            load_dotenv(override=True)
+        token = os.getenv("HF_TOKEN") or ""
+        if token and not token.startswith("your_"):
+            print("HF TOKEN FOUND")
+        else:
+            print("HF TOKEN FOUND BUT IT IS UNSET OR EMPTY")
+        return token
+    except Exception as e:
+        print(f"Error loading HF_TOKEN from dotenv: {e}")
+        from config import HF_TOKEN
+        token = HF_TOKEN or ""
+        if token and not token.startswith("your_"):
+            print("HF TOKEN FOUND")
+        return token
 
 
 def generate_tryon_via_hf_api(body_image: Image.Image, clothing_image: Image.Image) -> Optional[Image.Image]:
@@ -663,20 +711,58 @@ def generate_try_on(body_image_url: str = None, clothing_image_url: str = None,
             logger = logging.getLogger(__name__)
             logger.warning(f"Hugging Face Serverless Try-On failed: {e}, trying local models...")
 
-    # 1. Skip heavy local AI models (Advanced VTON / CatVTON) to prevent freezing on CPU-only machines.
-    # To use full AI automation without freezing, the HF Inference API is required.
-    import logging
-    logger = logging.getLogger(__name__)
-    logger.warning("Local Advanced VTON and CatVTON bypassed to prevent freezing. Set HF_TOKEN in .env for full AI automation.")
+    # 1. Try Advanced VTON (Highest quality, IP-Adapter + Segformer)
+    try:
+        from services.advanced_vton import generate_tryon_with_advanced_pipeline
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        logger.info("Attempting Advanced VTON inference...")
+        result_image = generate_tryon_with_advanced_pipeline(body_image, clothing_image)
+        if result_image is not None:
+            logger.info("✓ Advanced VTON inference successful")
+            return {"tryon_image": _encode_image_to_base64(result_image), "model": "advanced_vton"}
+        else:
+            print("STAGE ROUTING: Advanced VTON returned None.")
+    except Exception as e:
+        print("STAGE ROUTING: Advanced VTON inference exception:")
+        traceback.print_exc()
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.warning(f"Advanced VTON inference failed: {e}, trying local model...")
+
+    # 2. Try CatVTON (Legacy high-quality)
+    try:
+        from services.catvton_service import generate_tryon_with_catvton
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        logger.info("Attempting CatVTON inference...")
+        result_image = generate_tryon_with_catvton(body_image, clothing_image)
+        if result_image is not None:
+            logger.info("✓ CatVTON inference successful")
+            return {"tryon_image": _encode_image_to_base64(result_image), "model": "catvton"}
+        else:
+            print("STAGE ROUTING: CatVTON returned None.")
+    except Exception as e:
+        print("STAGE ROUTING: CatVTON inference exception:")
+        traceback.print_exc()
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.warning(f"CatVTON inference failed: {e}, trying local model...")
 
     # 3. Simple composition (Sharp, clean 2D overlay)
     try:
+        import logging
+        logger = logging.getLogger(__name__)
         logger.info("Using sharp composition...")
         try_on_image = _compose_try_on(body_image, clothing_image)
         return {"tryon_image": _encode_image_to_base64(try_on_image), "model": "ai_styled_preview"}
     except Exception as e:
         print("STAGE ROUTING: Composition exception:")
         traceback.print_exc()
+        import logging
+        logger = logging.getLogger(__name__)
         logger.warning(f"Composition failed: {e}, attempting trained model...")
 
     # 4. Try trained model as a last resort (blurry CNN)

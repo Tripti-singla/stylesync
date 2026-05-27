@@ -1,5 +1,6 @@
 from supabase import create_client
 import json
+import re
 from pathlib import Path
 
 from config import SUPABASE_URL, SUPABASE_KEY
@@ -128,11 +129,40 @@ def _normalize_db_product(row: dict) -> dict:
     normalized["subcategory"] = subcat or "clothing"
     
     # 10. Tags, Occasion, Season
-    normalized["tags"] = row.get("tags") or ([subcat] if subcat else [])
+    tags_val = row.get("tags") or ([subcat] if subcat else [])
+    normalized["tags"] = tags_val
     normalized["occasion"] = row.get("occasion") or ["casual"]
     normalized["season"] = row.get("season") or ["all-season"]
     normalized["size_chart"] = row.get("size_chart") or {"S": {}, "M": {}, "L": {}, "XL": {}}
     normalized["created_at"] = row.get("created_at")
+    
+    # 11. Extract and normalize primary_color
+    color_tags = [t for t in tags_val if isinstance(t, str) and t.startswith("color:")]
+    if color_tags:
+        normalized["primary_color"] = color_tags[0].split(":")[1]
+    else:
+        # Title keywords color extraction
+        title_lower = (row.get("title") or "").lower()
+        COLOR_KEYWORDS = ["black", "white", "grey", "gray", "silver", "navy", "blue", "denim", "indigo", "beige", "khaki", "tan", "sand", "brown", "chocolate", "red", "burgundy", "maroon", "orange", "peach", "yellow", "gold", "mustard", "green", "olive", "emerald", "mint", "pink", "rose", "coral", "purple", "violet", "lavender", "plum"]
+        found_color = None
+        for color in COLOR_KEYWORDS:
+            if re.search(r'\b' + re.escape(color) + r'\b', title_lower):
+                found_color = color
+                break
+        if found_color:
+            normalized["primary_color"] = found_color
+        else:
+            # Fallback based on demo titles
+            if "coofandy" in title_lower:
+                normalized["primary_color"] = "grey"
+            elif "valanch" in title_lower:
+                normalized["primary_color"] = "blue"
+            elif "oygsieg" in title_lower:
+                normalized["primary_color"] = "grey"
+            elif "zity" in title_lower:
+                normalized["primary_color"] = "grey"
+            else:
+                normalized["primary_color"] = "grey"
     
     return normalized
 
@@ -257,6 +287,48 @@ def get_product_by_id(product_id: str):
         return None
 
 
+def clean_search_query(q: str) -> str:
+    if not q:
+        return ""
+    q_lower = q.lower().strip()
+    
+    # Strip common prefixes
+    prefixes = [
+        "what should i wear with ",
+        "what should i wear for ",
+        "what should i wear ",
+        "what matches ",
+        "give me a ",
+        "give me ",
+        "suggest a ",
+        "suggest ",
+        "best outfit for a ",
+        "best outfit for ",
+        "style tips for ",
+        "style tips ",
+        "outfit for a ",
+        "outfit for "
+    ]
+    for prefix in prefixes:
+        if q_lower.startswith(prefix):
+            q = q[len(prefix):]
+            q_lower = q.lower().strip()
+            
+    # Strip common suffixes/fillers
+    suffixes = [
+        " outfit",
+        " outfits"
+    ]
+    for suffix in suffixes:
+        if q_lower.endswith(suffix):
+            q = q[:-len(suffix)]
+            q_lower = q.lower().strip()
+            
+    # Strip trailing question mark
+    q = q.rstrip('?').strip()
+    return q
+
+
 def get_products(search: str = None, category: str = None, gender: str = None, subcategory: str = None, limit: int = 20):
     if not supabase:
         return []
@@ -264,20 +336,44 @@ def get_products(search: str = None, category: str = None, gender: str = None, s
     query = supabase.table("products").select("*")
 
     if search:
-        search_term = f"%{search}%"
-        query = query.or_(f"title.ilike.{search_term},about_item.ilike.{search_term}")
+        cleaned_search = clean_search_query(search)
+        if cleaned_search:
+            search_term = f"%{cleaned_search}%"
+            words = [w for w in cleaned_search.lower().split() if len(w) > 1]
+            if len(words) > 1:
+                or_parts = []
+                for w in words:
+                    or_parts.append(f"title.ilike.%{w}%")
+                    or_parts.append(f"about_item.ilike.%{w}%")
+                query = query.or_(",".join(or_parts))
+            else:
+                query = query.or_(f"title.ilike.{search_term},about_item.ilike.{search_term}")
 
     if category:
-        query = query.ilike("breadcrumbs", f"%{category}%")
+        cat_lower = category.lower()
+        # Import CATEGORY_BREADCRUMB_MAP inside the function to avoid circular imports
+        from services.recommendation_service import CATEGORY_BREADCRUMB_MAP
+        if cat_lower in CATEGORY_BREADCRUMB_MAP:
+            keywords = CATEGORY_BREADCRUMB_MAP[cat_lower]
+            or_conditions = ",".join([f"breadcrumbs.ilike.%{kw}%" for kw in keywords])
+            query = query.or_(or_conditions)
+        else:
+            query = query.ilike("breadcrumbs", f"%{category}%")
 
     if gender:
-        query = query.ilike("breadcrumbs", f"%{gender}%")
+        g_lower = gender.lower()
+        if g_lower == "men":
+            query = query.ilike("breadcrumbs", "%men%").not_.ilike("breadcrumbs", "%women%")
+        elif g_lower == "women":
+            query = query.ilike("breadcrumbs", "%women%")
+        else:
+            query = query.ilike("breadcrumbs", f"%{gender}%")
 
     if subcategory:
         query = query.ilike("breadcrumbs", f"%{subcategory}%")
 
-    # Increase query limit for ranking when search is active
-    db_limit = limit * 3 if gender else limit
+    # Increase query limit for ranking to have enough candidates for post-query filtering
+    db_limit = max(limit * 5, 200) if gender else limit
     if search:
         db_limit = 1000
 
@@ -292,21 +388,31 @@ def get_products(search: str = None, category: str = None, gender: str = None, s
 
         # Prioritize matching logic
         if search:
-            s_lower = search.lower()
+            cleaned_search = clean_search_query(search)
+            s_lower = cleaned_search.lower() if cleaned_search else search.lower()
+            s_words = [w for w in s_lower.split() if len(w) > 1]
             
             def get_search_score(item):
                 title = (item.get("title") or "").lower()
                 desc = (item.get("description") or "").lower()
+                
+                # Full matches are highest priority
                 if s_lower == title:
-                    return 5
-                elif f" {s_lower} " in f" {title} ":
-                    return 4
+                    return 100
                 elif s_lower in title:
-                    return 3
-                elif f" {s_lower} " in f" {desc} ":
-                    return 2
+                    return 80
                 elif s_lower in desc:
-                    return 1
+                    return 60
+                
+                # Keyword matches
+                if s_words:
+                    matched_score = 0
+                    for w in s_words:
+                        if w in title:
+                            matched_score += 5
+                        elif w in desc:
+                            matched_score += 2
+                    return matched_score
                 return 0
 
             normalized.sort(key=get_search_score, reverse=True)

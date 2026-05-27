@@ -34,6 +34,7 @@ export interface WardrobeItem {
   category: "topwear" | "bottomwear" | "footwear" | "accessories" | "ethnic";
   color: string;
   dateAdded: string;
+  gender?: "men" | "women" | "unisex";
 }
 
 export const products: Product[] = [];

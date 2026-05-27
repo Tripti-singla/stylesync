@@ -19,6 +19,48 @@ interface OpenAIAdvice {
   pairings: string[];
 }
 
+const compressAndResizeImage = (file: File, maxWidth = 600, maxHeight = 800): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > maxWidth) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          }
+        } else {
+          if (height > maxHeight) {
+            width = Math.round((width * maxHeight) / height);
+            height = maxHeight;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          resolve(event.target?.result as string);
+          return;
+        }
+
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL("image/jpeg", 0.8));
+      };
+      img.onerror = (err) => reject(err);
+      img.src = event.target?.result as string;
+    };
+    reader.onerror = (err) => reject(err);
+    reader.readAsDataURL(file);
+  });
+};
+
 const WardrobePage = () => {
   const { user } = useAuth() as any;
   const [wardrobe, setWardrobe] = useState<WardrobeItem[]>(DUMMY_WARDROBE);
@@ -37,11 +79,17 @@ const WardrobePage = () => {
   const [pendingCategory, setPendingCategory] = useState<WardrobeItem["category"]>("topwear");
   const [pendingColor, setPendingColor] = useState("#1a202c");
   const [pendingOccasion, setPendingOccasion] = useState("casual");
+  const [pendingGender, setPendingGender] = useState<"men" | "women" | "unisex">("unisex");
 
   // Helper to map DB item to frontend WardrobeItem
   const mapDbWardrobeItem = (dbItem: any): WardrobeItem => {
     const nameTag = dbItem.detected_tags?.find((t: string) => t.startsWith("name:"));
     const name = nameTag ? nameTag.substring(5) : (dbItem.category || "Wardrobe Item");
+    
+    // Look for gender tag in detected_tags
+    const genderTag = dbItem.detected_tags?.find((t: string) => t.startsWith("gender:"));
+    const itemGender = genderTag ? (genderTag.substring(7) as any) : "unisex";
+
     return {
       id: dbItem.id,
       image: dbItem.image_url || "https://images.unsplash.com/photo-1445205170230-053b83016050?w=500&h=700&fit=crop",
@@ -49,7 +97,9 @@ const WardrobePage = () => {
       category: (dbItem.category as WardrobeItem["category"]) || "topwear",
       color: dbItem.primary_color || "#1a202c",
       dateAdded: dbItem.uploaded_at ? dbItem.uploaded_at.split("T")[0] : new Date().toISOString().split("T")[0],
-    };
+      matchScore: dbItem.match_score ?? dbItem.matchScore ?? dbItem.score ?? null,
+      gender: itemGender,
+    } as any;
   };
 
   // Load and save wardrobe items scoped to user
@@ -134,16 +184,22 @@ const WardrobePage = () => {
     const input = document.createElement("input");
     input.type = "file";
     input.accept = "image/*";
-    input.onchange = (e) => {
+    input.onchange = async (e) => {
       const file = (e.target as HTMLInputElement).files?.[0];
       if (file) {
-        const url = URL.createObjectURL(file);
-        setPendingImage(url);
-        setPendingName(file.name.replace(/\.[^.]+$/, ""));
-        setPendingCategory("topwear");
-        setPendingColor("#1a202c");
-        setPendingOccasion("casual");
-        setIsAddOpen(true);
+        try {
+          const base64 = await compressAndResizeImage(file);
+          setPendingImage(base64);
+          setPendingName(file.name.replace(/\.[^.]+$/, ""));
+          setPendingCategory("topwear");
+          setPendingColor("#1a202c");
+          setPendingOccasion("casual");
+          setPendingGender("unisex");
+          setIsAddOpen(true);
+        } catch (err) {
+          console.error("Error compressing image:", err);
+          toast.error("Failed to process image.");
+        }
       }
     };
     input.click();
@@ -163,6 +219,7 @@ const WardrobePage = () => {
       category: pendingCategory,
       color: pendingColor,
       dateAdded: new Date().toISOString().split("T")[0],
+      gender: pendingGender,
     };
 
     setIsAddOpen(false);
@@ -174,7 +231,7 @@ const WardrobePage = () => {
         category: newItem.category,
         primary_color: newItem.color,
         occasion: [pendingOccasion],
-        detected_tags: [`name:${newItem.name}`, newItem.category],
+        detected_tags: [`name:${newItem.name}`, newItem.category, `gender:${pendingGender}`],
       }).then((res) => {
         const mapped = mapDbWardrobeItem(res.item || res);
         setWardrobe((prev) => [mapped, ...prev]);
@@ -223,40 +280,9 @@ const WardrobePage = () => {
   const loadRecommendations = async () => {
     if (!selectedItem) return;
     setIsLoadingRecs(true);
-    try {
-      const response = await api.getOutfitRecommendations({
-        user_id: user?.id || "demo-user-1",
-        occasion,
-        category: selectedItem.category,
-        primary_color: selectedItem.color,
-        tags: [selectedItem.category],
-        limit: 6,
-        exclude_item_id: selectedItem.id,
-      });
-
-      const wardrobeMatches = (response.wardrobe_matches || []).map((item: any) => ({
-        id: item.id || `w-${Math.random().toString(36).slice(2, 9)}`,
-        image: item.image_url || item.image || selectedItem.image,
-        name: item.name || item.title || "Wardrobe Item",
-        category: (item.category as WardrobeItem["category"]) || "topwear",
-        color: item.primary_color || "#666",
-        dateAdded: item.uploaded_at?.split("T")?.[0] || new Date().toISOString().split("T")[0],
-      }));
-      const productMatches = (response.external_matches || []).map(mapProduct);
-
-      setApiRecs({ wardrobeMatches, productMatches });
-    } catch {
-      setApiRecs(null);
-    } finally {
-      setIsLoadingRecs(false);
-    }
-  };
-
-  const loadOpenAIAdvice = async () => {
-    if (!selectedItem) return;
-    setIsLoadingAIAdvice(true);
     setOpenAIAdvice(null);
     try {
+      // 1. Fetch live AI styling recommendation & product pairings
       const response = await api.getOpenAIRecommendations({
         user_id: user?.id || "demo-user-1",
         wardrobe: wardrobe.map((item) => ({
@@ -264,12 +290,13 @@ const WardrobePage = () => {
           category: item.category,
           color: item.color,
           occasion: occasion,
+          gender: item.gender || "unisex",
         })),
         query: `Suggest a styling recommendation for ${selectedItem.name} for a ${occasion} look.`,
         occasion,
-        gender: "unisex",
+        gender: selectedItem.gender || "unisex",
         style: "casual streetwear",
-        limit: 1,
+        limit: 6,
       });
 
       if (response && response.parsed_recommendation) {
@@ -279,8 +306,10 @@ const WardrobePage = () => {
           pairings: response.parsed_recommendation.pairings || [],
         });
 
+        // Map product recommendations
+        let productMatches = [];
         if (response.parsed_recommendation.products) {
-          const productMatches = response.parsed_recommendation.products.map((p: any) => {
+          productMatches = response.parsed_recommendation.products.map((p: any) => {
             const mapped = mapProduct(p);
             return {
               ...mapped,
@@ -288,27 +317,68 @@ const WardrobePage = () => {
               aiReason: p.ai_reason ?? p.reason
             };
           });
-          setApiRecs((prev) => ({
-            wardrobeMatches: prev?.wardrobeMatches || getRecommendations(selectedItem).wardrobeMatches || [],
-            productMatches: productMatches,
-          }));
         }
-      } else {
-        setOpenAIAdvice({
-          score: 85,
-          recommendation: response.recommendation || "No recommendation returned.",
-          pairings: [],
+
+        // 2. Fetch wardrobe recommendations (complementary items)
+        const localRecsResponse = await api.getOutfitRecommendations({
+          user_id: user?.id || "demo-user-1",
+          occasion,
+          category: selectedItem.category,
+          primary_color: selectedItem.color,
+          tags: [selectedItem.category],
+          limit: 6,
+          exclude_item_id: selectedItem.id,
         });
+
+        const wardrobeMatches = (localRecsResponse.wardrobe_matches || []).map((item: any) => ({
+          id: item.id || `w-${Math.random().toString(36).slice(2, 9)}`,
+          image: item.image_url || item.image || selectedItem.image,
+          name: item.name || item.title || "Wardrobe Item",
+          category: (item.category as WardrobeItem["category"]) || "topwear",
+          color: item.primary_color || "#666",
+          dateAdded: item.uploaded_at?.split("T")?.[0] || new Date().toISOString().split("T")[0],
+          matchScore: item.match_score ?? item.matchScore ?? item.score ?? null,
+        }));
+
+        setApiRecs({
+          wardrobeMatches,
+          productMatches: productMatches.length ? productMatches : (localRecsResponse.external_matches || []).map(mapProduct),
+        });
+      } else {
+        throw new Error("No parsed recommendation");
       }
     } catch (err) {
-      console.error("Failed to load OpenAI advice:", err);
-      setOpenAIAdvice({
-        score: 75,
-        recommendation: "Could not fetch advice from OpenAI. Showing a local styling suggestion instead: Pair this piece with complementary, contrasting tones and clean accessories to elevate your outfit.",
-        pairings: [],
-      });
+      console.warn("AI recommendation failed, falling back to rule-based engine:", err);
+      // Fallback: run local matching only
+      try {
+        const response = await api.getOutfitRecommendations({
+          user_id: user?.id || "demo-user-1",
+          occasion,
+          category: selectedItem.category,
+          primary_color: selectedItem.color,
+          tags: [selectedItem.category],
+          limit: 6,
+          exclude_item_id: selectedItem.id,
+        });
+
+        const wardrobeMatches = (response.wardrobe_matches || []).map((item: any) => ({
+          id: item.id || `w-${Math.random().toString(36).slice(2, 9)}`,
+          image: item.image_url || item.image || selectedItem.image,
+          name: item.name || item.title || "Wardrobe Item",
+          category: (item.category as WardrobeItem["category"]) || "topwear",
+          color: item.primary_color || "#666",
+          dateAdded: item.uploaded_at?.split("T")?.[0] || new Date().toISOString().split("T")[0],
+          matchScore: item.match_score ?? item.matchScore ?? item.score ?? null,
+        }));
+        const productMatches = (response.external_matches || []).map(mapProduct);
+
+        setApiRecs({ wardrobeMatches, productMatches });
+      } catch (fallbackErr) {
+        console.error("Local fallback also failed:", fallbackErr);
+        setApiRecs(null);
+      }
     } finally {
-      setIsLoadingAIAdvice(false);
+      setIsLoadingRecs(false);
     }
   };
 
@@ -416,17 +486,11 @@ const WardrobePage = () => {
                 </select>
                 <button
                   onClick={loadRecommendations}
-                  className="px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-sm hover:bg-primary/90"
+                  className="px-4 py-2 rounded-lg gradient-primary text-primary-foreground font-semibold text-sm hover:opacity-90 transition-all duration-300 shadow-md flex items-center gap-1.5"
                   disabled={isLoadingRecs}
                 >
-                  {isLoadingRecs ? "Matching..." : "Match for Occasion"}
-                </button>
-                <button
-                  onClick={loadOpenAIAdvice}
-                  className="px-3 py-1.5 rounded-md bg-muted text-foreground text-sm hover:bg-muted/90"
-                  disabled={isLoadingAIAdvice}
-                >
-                  {isLoadingAIAdvice ? "Styling..." : "AI Style Advice"}
+                  <Sparkles className={`w-4 h-4 ${isLoadingRecs ? 'animate-spin' : 'animate-pulse'}`} />
+                  {isLoadingRecs ? "AI Matching..." : "AI Styled Match"}
                 </button>
                 <button
                   onClick={() => handleDeleteItem(selectedItem.id)}
@@ -446,8 +510,13 @@ const WardrobePage = () => {
                 <div className="flex gap-3 overflow-x-auto pb-2">
                   {recs.wardrobeMatches.map((item) => (
                     <div key={item.id} className="flex-shrink-0 w-28">
-                      <div className="aspect-[3/4] rounded-lg overflow-hidden shadow-product">
+                      <div className="aspect-[3/4] rounded-lg overflow-hidden shadow-product relative">
                         <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
+                        {(item as any).matchScore && (
+                          <span className="absolute top-1.5 left-1.5 z-10 px-1.5 py-0.5 rounded text-[8px] font-bold text-white bg-gradient-to-r from-violet-600 to-indigo-600 shadow-md">
+                            {(item as any).matchScore}% Match
+                          </span>
+                        )}
                       </div>
                       <p className="text-xs mt-1.5 font-medium text-foreground truncate">{item.name}</p>
                     </div>
@@ -472,8 +541,10 @@ const WardrobePage = () => {
                       </div>
                     </div>
 
-                    <p className="text-sm leading-relaxed text-foreground/80 font-sans">
-                      {openAIAdvice.recommendation}
+                    <p className="text-sm leading-relaxed text-foreground/80 font-sans whitespace-pre-line">
+                      {openAIAdvice.recommendation.split("**").map((part, index) => 
+                        index % 2 === 1 ? <strong key={index} className="font-semibold text-foreground">{part}</strong> : part
+                      )}
                     </p>
 
                     {openAIAdvice.pairings && openAIAdvice.pairings.length > 0 && (
@@ -647,6 +718,21 @@ const WardrobePage = () => {
                         {occ}
                       </option>
                     ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-foreground mb-1.5">
+                    Gender Category
+                  </label>
+                  <select
+                    value={pendingGender}
+                    onChange={(e) => setPendingGender(e.target.value as "men" | "women" | "unisex")}
+                    className="w-full px-3.5 py-2.5 rounded-lg bg-background border border-border text-sm text-foreground focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all"
+                  >
+                    <option value="unisex">Unisex</option>
+                    <option value="women">Women</option>
+                    <option value="men">Men</option>
                   </select>
                 </div>
 

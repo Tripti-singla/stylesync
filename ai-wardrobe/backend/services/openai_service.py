@@ -73,10 +73,11 @@ def _build_openai_prompt(
             p_id = prod.get("id")
             p_title = prod.get("title") or prod.get("name") or "Product"
             p_cat = prod.get("category") or "clothing"
+            p_gender = prod.get("gender") or "unisex"
             p_price = prod.get("price") or 0.0
             p_desc = prod.get("description") or ""
             p_desc_short = p_desc[:100] + "..." if len(p_desc) > 100 else p_desc
-            prompt_parts.append(f"- ID: {p_id} | Title: {p_title} | Category: {p_cat} | Price: ${p_price} | Info: {p_desc_short}")
+            prompt_parts.append(f"- ID: {p_id} | Title: {p_title} | Category: {p_cat} | Gender: {p_gender} | Price: ${p_price} | Info: {p_desc_short}")
 
     prompt_parts.append("")
     prompt_parts.append(f"User is searching for: {query}")
@@ -107,7 +108,8 @@ def get_local_recommendation_fallback(
     ai_candidates: Optional[List[Dict[str, Any]]] = None,
 ) -> Dict[str, Any]:
     # A simple but smart local rule-based stylist
-    category = (product_metadata or {}).get("category") or ""
+    meta = product_metadata or {}
+    category = meta.get("category") or ""
     if not category and wardrobe:
         # Try to infer category from query matching wardrobe item name
         for item in wardrobe:
@@ -120,33 +122,80 @@ def get_local_recommendation_fallback(
         category = "topwear"
         
     occasion = occasion or "casual"
+    gender = gender or "unisex"
     
     # Select complementary items from user wardrobe
     comp_cats = get_complementary_categories(category)
     pairings = []
+    pairing_details = []
     for item in wardrobe:
         item_cat = item.get("category") or ""
         if item_cat in comp_cats and item.get("name") not in pairings:
             pairings.append(item.get("name"))
+            pairing_details.append(f"{item.get('name')} ({item.get('primary_color', 'coordinating color')})")
             if len(pairings) >= 3:
                 break
-                
-    # Generate styling advice text
+
+    item_title = meta.get("title") or query or "StyleSync Piece"
+    occ = occasion.capitalize()
+    style_theme = style or "smart casual"
+    weather_info = f"perfect for {weather}" if weather else "versatile for all-season wear"
+    pairings_text = ", ".join(pairing_details) if pairing_details else "complementary neutrals"
+    
+    # Generate dynamic advice based on occasion and category
+    silhouette_advice = ""
     if category == "topwear":
-        advice = f"Pair this stylish topwear with comfortable bottomwear like dark denim or tailored trousers. For a {occasion} look, style it with minimal accessories and clean footwear. The primary colors sync nicely, creating a balanced and cohesive outfit."
+        silhouette_advice = f"Since you're styling topwear, the goal is to balance the upper proportions. Pairing it with {pairings_text} from your wardrobe will define a clean waistline and form a flattering silhouette."
     elif category == "bottomwear":
-        advice = f"This bottomwear serves as a versatile foundation. Try styling it with a contrasting topwear. For a {occasion} vibe, layer with a jacket and complete the look with classic footwear."
+        silhouette_advice = f"As this is a bottomwear piece, we want to anchor the look. Pairing it with {pairings_text} creates a balanced vertical line, keeping the focus clean and highly proportional."
     elif category == "footwear":
-        advice = f"Your footwear anchors the entire outfit. Pair these shoes with well-fitted bottomwear and a complementary top. Perfect for {occasion} settings."
-    elif category == "ethnic":
-        advice = f"This elegant ethnic piece stands out beautifully. Complement it with traditional or contemporary footwear and subtle accessories to keep the focus on the main garment."
+        silhouette_advice = f"Footwear is the foundation of any outfit. Styling this with {pairings_text} ensures the visual weight is distributed beautifully, presenting an integrated and stylish look."
     else:
-        advice = f"Complete your outfit by pairing this accessory. It adds a touch of personality and helps elevate a simple {occasion} ensemble."
-        
-    if pairings:
-        advice += f" Specifically, try pairing it with items from your wardrobe like {', '.join(pairings[:-1]) + ' or ' + pairings[-1] if len(pairings) > 1 else pairings[0]}."
+        silhouette_advice = f"This gorgeous {category} works wonders for structural layering! When combined with {pairings_text}, it builds a sleek, high-fashion depth that feels both deliberate and effortless."
+
+    color_theme = "a coordinating color scheme"
+    primary_color = meta.get("primary_color") or ""
+    if not primary_color and wardrobe:
+        for item in wardrobe:
+            if item.get("name", "").lower() in query.lower():
+                primary_color = item.get("primary_color")
+                break
+    
+    if primary_color:
+        color_theme = f"a palette focused around {primary_color.capitalize()}"
+    
+    color_advice = f"We are building {color_theme}. Combining this garment with coordinating pieces from your wardrobe avoids clashing while creating a modern color-blocked harmony."
+    
+    occasion_advice = ""
+    if occasion == "casual":
+        occasion_advice = f"For a relaxed Casual setting, keep the look easygoing. Style it with clean minimalist sneakers or flats. Roll up the sleeves slightly if layering, and finish with simple accessories."
+    elif occasion == "formal":
+        occasion_advice = f"To adapt this for a Formal environment, structured layering is key. Pair with a crisp blazer, tailored trousers, and leather dress shoes or elegant heels to command the room."
+    elif occasion == "party":
+        occasion_advice = f"For a lively Party atmosphere, lean into bold styling! Add some statement jewelry, metallic highlights, and sleek footwear to bring a vibrant energy to the look."
+    elif occasion == "business":
+        occasion_advice = f"Perfecting this for Business wear requires sharp, neat lines. Combine with neutral trousers or a pencil skirt, and anchor with professional oxfords or pumps."
     else:
-        advice += " Add complementary categories like bottomwear or footwear to your wardrobe to get automated pairing recommendations!"
+        occasion_advice = f"To bring this look together for {occ} settings, balance comfort with tailored pieces. Layer with an unbuttoned lightweight overshirt or blazer to adapt to {weather_info} seamlessly."
+
+    # Pro tip based on gender
+    pro_tip = "Roll up the sleeves slightly or try a 'French tuck' to define your waistline and convey a relaxed yet tailored vibe."
+    if gender == "men":
+        pro_tip = "Pro Tip: Keep the bottom hem clean, and anchor the outfit with structured leather boots or minimalist sneakers for a sharp masculine frame."
+    elif gender == "women":
+        pro_tip = "Pro Tip: Define your waistline with a high-rise fit or a delicate belt, and add understated silver or gold jewelry to complete the feminine contour."
+
+    advice = (
+        f"✨ **StyleSync AI Stylist [Local Mode]**: Here is a curated styling guide to elevate your **{item_title}**!\n\n"
+        f"👗 **The Silhouette & Proportions**\n"
+        f"{silhouette_advice}\n\n"
+        f"🎨 **Color Story & Harmony**\n"
+        f"{color_advice}\n\n"
+        f"💼 **Occasion Guide: {occ} ({style_theme})**\n"
+        f"{occasion_advice}\n\n"
+        f"🌟 **AI Stylist Tip**\n"
+        f"{pro_tip}"
+    )
 
     candidates = ai_candidates or []
     enriched_products = []
@@ -204,7 +253,7 @@ def get_gemini_recommendation(
         ai_candidates=ai_candidates,
     )
 
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key={GEMINI_API_KEY}"
     headers = {"Content-Type": "application/json"}
     payload = {
         "contents": [
@@ -220,13 +269,30 @@ def get_gemini_recommendation(
         "generationConfig": {
             "responseMimeType": "application/json",
             "temperature": 0.85,
-            "maxOutputTokens": 1000
+            "maxOutputTokens": 8192
         }
     }
 
-    response = requests.post(url, headers=headers, json=payload, timeout=20)
-    response.raise_for_status()
-    resp_json = response.json()
+    import time
+    response = None
+    resp_json = None
+    for attempt in range(3):
+        try:
+            response = requests.post(url, headers=headers, json=payload, timeout=20)
+            if response.status_code == 429:
+                print(f"Gemini API rate limited (429), retrying in {2 * (attempt + 1)}s... (attempt {attempt+1}/3)")
+                time.sleep(2 * (attempt + 1))
+                continue
+            response.raise_for_status()
+            resp_json = response.json()
+            break
+        except Exception as e:
+            if attempt == 2:
+                raise
+            time.sleep(2 * (attempt + 1))
+            
+    if resp_json is None:
+        raise ValueError("Failed to get response from Gemini API after retries")
     
     try:
         content = resp_json["candidates"][0]["content"]["parts"][0]["text"]
@@ -259,7 +325,7 @@ def get_gemini_recommendation(
         parsed["products"] = enriched_products
 
     return {
-        "model": "gemini-1.5-flash",
+        "model": "gemini-flash-latest",
         "recommendation": parsed.get("recommendation", content),
         "parsed_recommendation": parsed,
         "request": {
@@ -296,20 +362,35 @@ def get_outfit_recommendation(
             selected_item = wardrobe[0]
             
     selected_category = selected_item.get("category") if selected_item else "topwear"
-    comp_cats = get_complementary_categories(selected_category)
-    
-    # 2. Fetch candidate products of complementary categories
-    candidate_products = []
-    if comp_cats:
-        for comp_cat in comp_cats:
-            prods = get_products(category=comp_cat, gender=gender, limit=12) or []
-            candidate_products.extend(prods)
-    else:
-        candidate_products = get_products(category=selected_category, gender=gender, limit=24) or []
+    selected_gender = gender or "unisex"
+    if selected_item and selected_item.get("gender"):
+        selected_gender = selected_item.get("gender")
         
-    # Fallback to general products if catalog is small
+    # Use None (all genders) for unisex items to prevent empty lists due to strict filtering
+    query_gender = selected_gender if selected_gender != "unisex" else None
+    
+    # 2. Fetch candidate products of complementary categories strictly
+    candidate_products = []
+    target_cats = []
+    if selected_category == "topwear":
+        target_cats = ["bottomwear"]
+    elif selected_category == "bottomwear":
+        target_cats = ["topwear"]
+    else:
+        target_cats = get_complementary_categories(selected_category)
+        
+    for comp_cat in target_cats:
+        prods = get_products(category=comp_cat, gender=query_gender, limit=15)
+        if not prods and query_gender:
+            # Fallback to general gender/unisex for this category
+            prods = get_products(category=comp_cat, gender=None, limit=15) or []
+        candidate_products.extend(prods)
+        
+    # Fallback to general products of complementary category if catalog is small
     if len(candidate_products) < 6:
-        candidate_products.extend(get_products(limit=30) or [])
+        for comp_cat in target_cats:
+            prods = get_products(category=comp_cat, limit=20) or []
+            candidate_products.extend(prods)
         
     # RapidAPI fetch if configured
     try:
@@ -347,7 +428,7 @@ def get_outfit_recommendation(
                 ai_candidates=ai_candidates,
             )
         except Exception as e:
-            logger.error("Gemini recommendation failed: %s. Falling back to OpenAI...", e)
+            logger.error("Gemini recommendation failed. Falling back to OpenAI...", exc_info=True)
 
     # 5. Fallback/Primary to OpenAI
     if not OPENAI_API_KEY or OPENAI_CLIENT is None:

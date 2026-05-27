@@ -1,7 +1,11 @@
 import os
 from dotenv import load_dotenv
 
+# Load from both current folder and parent folder to ensure maximum robustness
 load_dotenv()
+parent_env = os.path.join(os.path.dirname(__file__), "..", ".env")
+if os.path.exists(parent_env):
+    load_dotenv(dotenv_path=parent_env)
 
 # Supabase
 SUPABASE_URL = os.getenv("SUPABASE_URL") or os.getenv("VITE_SUPABASE_URL")

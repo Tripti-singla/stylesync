@@ -81,6 +81,7 @@ def analyze_clothing_with_gpt(image_url=None, image_file=None):
                                 "text": """Analyze this clothing item and return a JSON object with exactly these fields:
 {
     "category": "category_name",
+    "gender": "men | women | unisex",
     "colors": ["color1", "color2"],
     "primary_color": "dominant_color",
     "occasion": ["occasion1", "occasion2"],
@@ -92,6 +93,7 @@ def analyze_clothing_with_gpt(image_url=None, image_file=None):
 }
 
 Categories: tops, shirts, t-shirts, dresses, pants, jeans, skirts, jackets, coats, hoodies, sweaters, blazers, suits, shoes, boots, sandals, accessories
+Genders: men, women, unisex
 Occasions: casual, formal, business, party, evening, sports, outdoor, beach, gym, everyday
 Seasons: summer, winter, spring, autumn, all-season
 
@@ -127,6 +129,7 @@ Return only valid JSON, no other text."""
         # Validate and normalize response
         return {
             "category": result.get("category", "clothing").lower(),
+            "gender": result.get("gender", "unisex").lower(),
             "colors": result.get("colors", ["unknown"]),
             "primary_color": result.get("primary_color", result.get("colors", ["gray"])[0]).lower(),
             "occasion": result.get("occasion", ["casual"]),
@@ -146,6 +149,7 @@ def _get_fallback_analysis():
     """Return fallback analysis when GPT is not available."""
     return {
         "category": "clothing",
+        "gender": "unisex",
         "colors": ["unknown"],
         "primary_color": "gray",
         "occasion": ["casual"],
@@ -165,6 +169,7 @@ def analyze_clothing_with_gemini(image_base64: str, media_type: str):
     prompt = """Analyze this clothing item and return a JSON object with exactly these fields:
 {
     "category": "category_name",
+    "gender": "men | women | unisex",
     "colors": ["color1", "color2"],
     "primary_color": "dominant_color",
     "occasion": ["occasion1", "occasion2"],
@@ -176,12 +181,13 @@ def analyze_clothing_with_gemini(image_base64: str, media_type: str):
 }
 
 Categories: tops, shirts, t-shirts, dresses, pants, jeans, skirts, jackets, coats, hoodies, sweaters, blazers, suits, shoes, boots, sandals, accessories
+Genders: men, women, unisex
 Occasions: casual, formal, business, party, evening, sports, outdoor, beach, gym, everyday
 Seasons: summer, winter, spring, autumn, all-season
 
 Return only valid JSON, no other text."""
 
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key={GEMINI_API_KEY}"
     headers = {"Content-Type": "application/json"}
     payload = {
         "contents": [
@@ -203,13 +209,30 @@ Return only valid JSON, no other text."""
         "generationConfig": {
             "responseMimeType": "application/json",
             "temperature": 0.4,
-            "maxOutputTokens": 500
+            "maxOutputTokens": 8192
         }
     }
 
-    response = requests.post(url, headers=headers, json=payload, timeout=30)
-    response.raise_for_status()
-    resp_json = response.json()
+    import time
+    response = None
+    resp_json = None
+    for attempt in range(3):
+        try:
+            response = requests.post(url, headers=headers, json=payload, timeout=30)
+            if response.status_code == 429:
+                print(f"Gemini API rate limited (429) during analysis, retrying in {2 * (attempt + 1)}s... (attempt {attempt+1}/3)")
+                time.sleep(2 * (attempt + 1))
+                continue
+            response.raise_for_status()
+            resp_json = response.json()
+            break
+        except Exception as e:
+            if attempt == 2:
+                raise
+            time.sleep(2 * (attempt + 1))
+            
+    if resp_json is None:
+        raise ValueError("Failed to get response from Gemini API after retries")
     
     try:
         content = resp_json["candidates"][0]["content"]["parts"][0]["text"]
@@ -228,6 +251,7 @@ Return only valid JSON, no other text."""
     result = json.loads(content_clean)
     return {
         "category": result.get("category", "clothing").lower(),
+        "gender": result.get("gender", "unisex").lower(),
         "colors": result.get("colors", ["unknown"]),
         "primary_color": result.get("primary_color", result.get("colors", ["gray"])[0]).lower(),
         "occasion": result.get("occasion", ["casual"]),
@@ -236,7 +260,7 @@ Return only valid JSON, no other text."""
         "style": result.get("style", ""),
         "brand_hint": result.get("brand_hint"),
         "description": result.get("description", ""),
-        "analysis_method": "gemini-1.5-flash"
+        "analysis_method": "gemini-flash-latest"
     }
 
 

@@ -197,7 +197,7 @@ const ProductDetail = () => {
           {/* Action Buttons */}
           <div className="flex flex-col gap-3 sm:flex-row">
             <Link
-              to={`/tryon?clothing_url=${encodeURIComponent(product.image)}&clothing_name=${encodeURIComponent(product.name)}&autogenerate=true`}
+              to={`/tryon?clothing_url=${encodeURIComponent(product.image)}&clothing_name=${encodeURIComponent(product.name)}&gender=${product.category || 'unisex'}&autogenerate=true`}
               className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl border border-primary/20 bg-primary/10 px-5 py-3 text-sm font-semibold text-primary hover:bg-primary/15 transition-colors"
             >
               <Sparkles className="w-4 h-4" /> Try On (Virtual fitting)

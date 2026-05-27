@@ -67,6 +67,9 @@ async def recommend_outfit(req: OutfitMatchRequest):
 @router.post("/recommendations/openai")
 async def recommend_outfit_openai(req: OpenAIRecommendationRequest):
     try:
+        from config import GEMINI_API_KEY, OPENAI_API_KEY
+        print(f"DEBUG: GEMINI_API_KEY loaded in route: {GEMINI_API_KEY[:6] if GEMINI_API_KEY else 'None'}...", flush=True)
+        print(f"DEBUG: OPENAI_API_KEY loaded in route: {OPENAI_API_KEY[:6] if OPENAI_API_KEY else 'None'}...", flush=True)
         result = get_outfit_recommendation(
             wardrobe=req.wardrobe,
             query=req.query,
@@ -77,8 +80,10 @@ async def recommend_outfit_openai(req: OpenAIRecommendationRequest):
             product_metadata=req.product_metadata,
             limit=req.limit,
         )
+        print(f"DEBUG: Recommendation model used: {result.get('model')}", flush=True)
         return result
     except Exception as err:
+        print(f"DEBUG: Recommendation failed with error: {err}", flush=True)
         raise HTTPException(status_code=500, detail=str(err))
 
 

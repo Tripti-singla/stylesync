@@ -6,28 +6,50 @@ import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { WardrobeItem } from "@/data/products";
 
+const COLOR_HARMONY_MAP: Record<string, Record<string, number>> = {
+  white: { white: 6, black: 10, navy: 10, blue: 9, grey: 8, beige: 9, brown: 8, red: 10, orange: 9, yellow: 9, green: 9, pink: 10, purple: 9 },
+  black: { white: 10, black: 6, navy: 8, blue: 9, grey: 9, beige: 10, brown: 8, red: 10, orange: 9, yellow: 10, green: 9, pink: 10, purple: 9 },
+  grey: { white: 8, black: 9, navy: 9, blue: 8, grey: 5, beige: 7, brown: 6, red: 9, orange: 8, yellow: 8, green: 8, pink: 9, purple: 8 },
+  beige: { white: 9, black: 10, navy: 10, blue: 9, grey: 7, beige: 5, brown: 9, red: 8, orange: 8, yellow: 7, green: 9, pink: 8, purple: 7 },
+  navy: { white: 10, black: 8, navy: 5, blue: 8, grey: 9, beige: 10, brown: 8, red: 9, orange: 8, yellow: 8, green: 8, pink: 9, purple: 7 },
+  blue: { white: 9, black: 9, navy: 8, blue: 6, grey: 8, beige: 9, brown: 9, red: 8, orange: 7, yellow: 8, green: 7, pink: 8, purple: 7 },
+  brown: { white: 8, black: 8, navy: 8, blue: 9, grey: 6, beige: 9, brown: 5, red: 7, orange: 8, yellow: 8, green: 8, pink: 7, purple: 6 },
+  red: { white: 10, black: 10, navy: 9, blue: 8, grey: 9, beige: 8, brown: 7, red: 4, orange: 6, yellow: 7, green: 5, pink: 7, purple: 6 },
+  orange: { white: 9, black: 9, navy: 8, blue: 7, grey: 8, beige: 8, brown: 8, red: 6, orange: 4, yellow: 8, green: 6, pink: 6, purple: 5 },
+  yellow: { white: 9, black: 10, navy: 8, blue: 8, grey: 8, beige: 7, brown: 8, red: 7, orange: 8, yellow: 4, green: 7, pink: 7, purple: 8 },
+  green: { white: 9, black: 9, navy: 8, blue: 7, grey: 8, beige: 9, brown: 8, red: 5, orange: 6, yellow: 7, green: 4, pink: 7, purple: 6 },
+  pink: { white: 10, black: 10, navy: 9, blue: 8, grey: 9, beige: 8, brown: 7, red: 7, orange: 6, yellow: 7, green: 7, pink: 4, purple: 7 },
+  purple: { white: 9, black: 9, navy: 7, blue: 7, grey: 8, beige: 7, brown: 6, red: 6, orange: 5, yellow: 8, green: 6, pink: 7, purple: 4 }
+};
+
+const getColorCategory = (colorStr: string): string => {
+  if (!colorStr) return "unknown";
+  const c = colorStr.toLowerCase().trim();
+  
+  if (c.includes("white") || c.includes("cream") || c.includes("off-white") || c === "#ffffff") return "white";
+  if (c.includes("black") || c.includes("charcoal") || c === "#000000" || c === "#1a202c") return "black";
+  if (c.includes("navy") || c.includes("dark blue")) return "navy";
+  if (c.includes("blue") || c.includes("denim") || c.includes("indigo") || c === "#4682b4" || c === "steel") return "blue";
+  if (c.includes("grey") || c.includes("gray") || c.includes("silver") || c === "#666" || c === "#888") return "grey";
+  if (c.includes("beige") || c.includes("khaki") || c.includes("tan") || c.includes("sand")) return "beige";
+  if (c.includes("brown") || c.includes("chocolate")) return "brown";
+  if (c.includes("red") || c.includes("burgundy") || c.includes("maroon")) return "red";
+  if (c.includes("orange") || c.includes("peach")) return "orange";
+  if (c.includes("yellow") || c.includes("gold") || c.includes("mustard")) return "yellow";
+  if (c.includes("green") || c.includes("olive") || c.includes("emerald") || c.includes("mint") || c === "#556b2f") return "green";
+  if (c.includes("pink") || c.includes("rose") || c.includes("coral")) return "pink";
+  if (c.includes("purple") || c.includes("violet") || c.includes("lavender") || c.includes("plum")) return "purple";
+  return "unknown";
+};
+
 const areColorsCompatible = (color1: string, color2: string): boolean => {
-  const c1 = color1.toLowerCase().trim();
-  const c2 = color2.toLowerCase().trim();
+  const cat1 = getColorCategory(color1);
+  const cat2 = getColorCategory(color2);
   
-  const neutrals = ["black", "white", "gray", "grey", "#ffffff", "#000000", "#1a202c", "#666", "#888", "#f3f4f6", "#e5e7eb", "beige", "cream", "navy", "denim"];
+  if (cat1 === "unknown" || cat2 === "unknown") return true;
   
-  if (neutrals.some(n => c1.includes(n) || c1 === n) || neutrals.some(n => c2.includes(n) || c2 === n)) {
-    return true;
-  }
-  
-  const goodPairs = [
-    ["red", "black"], ["red", "white"], ["red", "blue"], ["red", "grey"],
-    ["blue", "brown"], ["blue", "white"], ["blue", "grey"], ["blue", "black"], ["blue", "yellow"],
-    ["green", "black"], ["green", "white"], ["green", "brown"], ["green", "beige"],
-    ["yellow", "black"], ["yellow", "navy"], ["yellow", "white"], ["yellow", "grey"],
-    ["pink", "white"], ["pink", "grey"], ["pink", "black"], ["pink", "denim"],
-    ["brown", "beige"], ["brown", "cream"], ["brown", "white"], ["brown", "black"]
-  ];
-  
-  return goodPairs.some(([p1, p2]) => 
-    (c1.includes(p1) && c2.includes(p2)) || (c1.includes(p2) && c2.includes(p1))
-  );
+  const score = COLOR_HARMONY_MAP[cat1]?.[cat2] ?? 5;
+  return score >= 8;
 };
 
 const normalizeCategory = (category: string, name: string): string => {

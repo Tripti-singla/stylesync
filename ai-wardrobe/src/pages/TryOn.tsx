@@ -39,6 +39,7 @@ const TryOnPage = () => {
   const [tryonResult, setTryonResult] = useState<string>("");
   const [statusMessage, setStatusMessage] = useState<string>("");
   const [occasion, setOccasion] = useState<string>("casual");
+  const [gender, setGender] = useState<string>("unisex");
   const [isGenerating, setIsGenerating] = useState(false);
   const [isMatching, setIsMatching] = useState(false);
   const [isSavingSample, setIsSavingSample] = useState(false);
@@ -109,6 +110,7 @@ const TryOnPage = () => {
   useEffect(() => {
     const urlParam = searchParams.get("clothing_url");
     const nameParam = searchParams.get("clothing_name");
+    const genderParam = searchParams.get("gender");
     if (urlParam) {
       setClothingImageUrl(urlParam);
       setClothingPreview(urlParam);
@@ -116,6 +118,9 @@ const TryOnPage = () => {
     }
     if (nameParam) {
       setClothingName(nameParam);
+    }
+    if (genderParam) {
+      setGender(genderParam.toLowerCase());
     }
   }, [searchParams]);
 
@@ -165,6 +170,7 @@ const TryOnPage = () => {
       const formData = new FormData();
       formData.append("user_id", USER_ID);
       formData.append("occasion", occasion);
+      formData.append("gender", gender);
       formData.append("body_image", selectedBodyFile);
       
       if (clothingFile) {
@@ -219,6 +225,7 @@ const TryOnPage = () => {
         user_id: USER_ID,
         occasion,
         category: "topwear",
+        gender,
         tags: ["topwear"],
         limit: 6,
       });
@@ -521,6 +528,18 @@ const TryOnPage = () => {
                           {value}
                         </option>
                       ))}
+                    </select>
+                  </div>
+                  <div className="flex items-center gap-2 rounded-[1.5rem] border border-border bg-background px-3 py-2">
+                    <span className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Gender</span>
+                    <select
+                      value={gender}
+                      onChange={(event) => setGender(event.target.value)}
+                      className="bg-transparent text-sm font-medium text-foreground outline-none animate-none"
+                    >
+                      <option value="unisex">Unisex</option>
+                      <option value="men">Men</option>
+                      <option value="women">Women</option>
                     </select>
                   </div>
                   <div className="flex flex-wrap gap-2">

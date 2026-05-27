@@ -50,7 +50,6 @@ async def save_sample(
 async def predict_tryon(
     user_id: str = Form(...),
     occasion: Optional[str] = Form("casual"),
-    gender: Optional[str] = Form("unisex"),
     body_image_url: Optional[str] = Form(None),
     clothing_image_url: Optional[str] = Form(None),
     body_image: Optional[UploadFile] = File(None),
@@ -78,20 +77,15 @@ async def predict_tryon(
         saved_sample = None
         
         # Step 1: Generate try-on
-        print(f"[TRYON] Generating try-on for user={user_id}, occasion={occasion}, gender={gender}")
+        print(f"[TRYON] Generating try-on for user={user_id}, occasion={occasion}")
         try:
-            from services.virtual_tryon import generate_try_on
-            if body_stream is not None:
-                body_stream.seek(0)
-            if clothing_stream is not None:
-                clothing_stream.seek(0)
             result = generate_try_on(
                 body_image_url=body_image_url,
                 clothing_image_url=clothing_image_url,
                 body_upload=body_stream,
-                clothing_upload=clothing_stream
+                clothing_upload=clothing_stream,
             )
-            print(f"[TRYON] AI Try-on generated successfully with model: {result.get('model')}")
+            print(f"[TRYON] Try-on generated successfully with model: {result.get('model')}")
         except Exception as e:
             logger.exception("Try-on generation failed. Invoking robust local pre-composer as safe backup...")
             try:
@@ -114,11 +108,11 @@ async def predict_tryon(
                 clothing_stream.seek(0)
                 print("[ANALYSIS] Analyzing clothing from upload stream")
                 clothing_analysis = analyze_clothing(image_file=clothing_stream)
-                print(f"[ANALYSIS] Analysis complete: category={clothing_analysis.get('category')}, gender={clothing_analysis.get('gender')}, color={clothing_analysis.get('primary_color')}")
+                print(f"[ANALYSIS] Analysis complete: category={clothing_analysis.get('category')}, color={clothing_analysis.get('primary_color')}")
             elif clothing_image_url:
                 print(f"[ANALYSIS] Analyzing clothing from URL: {clothing_image_url}")
                 clothing_analysis = analyze_clothing(image_url=clothing_image_url)
-                print(f"[ANALYSIS] Analysis complete: category={clothing_analysis.get('category')}, gender={clothing_analysis.get('gender')}")
+                print(f"[ANALYSIS] Analysis complete: category={clothing_analysis.get('category')}")
         except Exception as e:
             logger.exception("Could not analyze clothing")
         
@@ -126,15 +120,11 @@ async def predict_tryon(
         recommendations = None
         if clothing_analysis:
             try:
-                req_gender = gender
-                if (not req_gender or req_gender == "unisex") and clothing_analysis.get("gender"):
-                    req_gender = clothing_analysis.get("gender")
-                print(f"[RECOMMEND] Finding matches for category={clothing_analysis.get('category')}, occasion={occasion}, gender={req_gender}")
+                print(f"[RECOMMEND] Finding matches for category={clothing_analysis.get('category')}, occasion={occasion}")
                 recommendations = build_outfit_matches(
                     user_id=user_id,
                     occasion=occasion,
                     category=clothing_analysis.get("category"),
-                    gender=req_gender,
                     primary_color=clothing_analysis.get("primary_color"),
                     tags=clothing_analysis.get("tags"),
                     limit=6,
